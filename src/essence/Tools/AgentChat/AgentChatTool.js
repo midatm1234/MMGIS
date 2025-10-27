@@ -75,9 +75,7 @@ function interfaceWithMMGIS() {
         const n = b.length
         if (m === 0) return n
         if (n === 0) return m
-        const dp = Array.from({ length: m + 1 }, () =>
-            new Array(n + 1).fill(0)
-        )
+        const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0))
         for (let i = 0; i <= m; i += 1) dp[i][0] = i
         for (let j = 0; j <= n; j += 1) dp[0][j] = j
         for (let i = 1; i <= m; i += 1) {
@@ -255,7 +253,11 @@ function interfaceWithMMGIS() {
     function getLastUserMessage() {
         for (let i = state.history.length - 1; i >= 0; i -= 1) {
             const entry = state.history[i]
-            if (entry && entry.role === 'user' && typeof entry.text === 'string')
+            if (
+                entry &&
+                entry.role === 'user' &&
+                typeof entry.text === 'string'
+            )
                 return entry.text
         }
         return ''
@@ -315,8 +317,8 @@ function interfaceWithMMGIS() {
         overlay.style.pointerEvents = 'none'
         const startW = 440
         const startH = 560
-        const topPad = 72
-        const rightPad = 24
+        const topPad = 40
+        const rightPad = 40
         overlay.style.left = `${Math.max(8, window.innerWidth - startW - rightPad)}px`
         overlay.style.top = `${Math.max(8, topPad)}px`
         overlay.style.width = `${startW}px`
@@ -684,11 +686,11 @@ function interfaceWithMMGIS() {
 
         return `
       <article class="ac-msg" style="display:flex; flex-direction:column; gap:6px; margin: 10px 2px;">
-        <div class="ac-meta" style="color:#a7a7a7; font-size:11px; display:flex; gap:8px; padding: 0 4px;">
+        <div class="ac-meta" style="color:#a7a7a7; font-size:11px; display:flex; gap:8px; padding: 0 4px; ${isU ? 'justify-content: flex-end; ' : ''}">
           <span class="ac-role" style="color:#d6d6d6; font-weight:600;">${roleLabel}</span>
           <span class="ac-time" aria-label="time ${t}" style="opacity:0.85;">${t}</span>
         </div>
-        <div class="${bubbleClass}" aria-live="${isA ? 'polite' : 'off'}" style="border-radius: 12px; padding:12px 14px; border:1px solid rgba(255,255,255,0.08); ${isA ? 'background:#171a1c;' : isU ? 'background:#0b3a55; border-color: rgba(255,255,255,0.15);' : 'background:#332a00; border-color:#5b4a00; color:#ffedb3;'}">
+        <div class="${bubbleClass}" aria-live="${isA ? 'polite' : 'off'}" style="border-radius: 12px; padding:12px 14px; border:1px solid rgba(255,255,255,0.08); ${isA ? 'background:#171a1c;' : isU ? 'background:#0b3a55; border-color: rgba(255,255,255,0.15); margin-left: 40px;' : 'background:#332a00; border-color:#5b4a00; color:#ffedb3;'}">
           <div class="ac-prose" style="font-size: 13px; line-height: 1.45;">${content}</div>
           ${notes}
           ${cites}
