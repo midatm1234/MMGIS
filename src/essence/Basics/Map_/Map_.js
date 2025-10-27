@@ -531,31 +531,25 @@ let Map_ = {
                 L_.layers.data[L_._layersOrdered[i]].type == 'vector' &&
                 L_.layers.data[L_._layersOrdered[i]].name == layerObj.name
             ) {
+                // Original
                 if (L_._layersBeingMade[layerObj.name] !== true) {
-                    const wasOn = L_.layers.on[layerObj.name]
-
-                    if (wasOn)
-                        L_.toggleLayer(
-                            L_.layers.data[layerObj.name],
-                            skipOrderedBringToFront
-                        ) // turn off if on
-
-                    // fake on
+                    // makeLayer now handles all layer swapping internally for refresh operations
                     L_.layers.on[layerObj.name] = true
-                    await makeLayer(layerObj, true, null, null, null, stopLoops)
+                    await makeLayer(
+                        layerObj,
+                        true,
+                        null,
+                        null,
+                        null,
+                        stopLoops,
+                        true
+                    )
                     L_.addVisible(Map_, [layerObj.name])
-
-                    // turn off if was off
-                    if (wasOn) L_.layers.on[layerObj.name] = false
-                    L_.toggleLayer(
-                        L_.layers.data[layerObj.name],
-                        skipOrderedBringToFront
-                    ) // turn back on/off
 
                     L_.enforceVisibilityCutoffs()
                 } else {
-                    console.error(
-                        `ERROR - refreshLayer: Cannot make layer ${layerObj.display_name}/${layerObj.name} as it's already being made!`
+                    console.warn(
+                        `WARNING - refreshLayer: Cannot make layer ${layerObj.display_name}/${layerObj.name} as it's already being made!`
                     )
                     if (typeof cb === 'function') cb()
                     return false
@@ -677,7 +671,8 @@ async function makeLayer(
     forceGeoJSON,
     id,
     forceMake,
-    stopLoops
+    stopLoops,
+    isRefresh = false
 ) {
     return new Promise(async (resolve, reject) => {
         const layerName = L_.asLayerUUID(layerObj.name)
@@ -700,7 +695,8 @@ async function makeLayer(
                         layerObj,
                         evenIfOff,
                         null,
-                        forceGeoJSON
+                        forceGeoJSON,
+                        isRefresh
                     )
                     break
                 case 'velocity':
@@ -874,7 +870,8 @@ async function makeVectorLayer(
     layerObj,
     evenIfOff,
     useEmptyGeoJSON,
-    forceGeoJSON
+    forceGeoJSON,
+    isRefresh = false
 ) {
     return new Promise((resolve, reject) => {
         if (forceGeoJSON) add(forceGeoJSON)
@@ -947,8 +944,26 @@ async function makeVectorLayer(
                 onEachFeatureDefault,
                 Map_
             )
+
+            // For refresh operations, toggle off old layer and handle seamless swap
+            let wasOnForRefresh = false
+            if (
+                isRefresh &&
+                L_.layers.on[layerObj.name] &&
+                L_.layers.layer[layerObj.name] &&
+                L_.Map_.map.hasLayer(L_.layers.layer[layerObj.name])
+            ) {
+                wasOnForRefresh = true
+                L_.toggleLayer(L_.layers.data[layerObj.name], true)
+            }
+
             L_.layers.attachments[layerObj.name] = vl.sublayers
             L_.layers.layer[layerObj.name] = vl.layer
+
+            // For refresh operations, turn the new layer back on if the old one was on
+            if (isRefresh && wasOnForRefresh) {
+                L_.toggleLayer(L_.layers.data[layerObj.name], true)
+            }
 
             d3.selectAll('.' + F_.getSafeName(layerObj.name)).data(
                 data.features
@@ -1144,6 +1159,14 @@ async function makeVelocityLayer(
 }
 
 async function makeTileLayer(layerObj) {
+    // Helper function to add default 'asset_' prefix to bands in expressions if not already prefixed
+    const processExpression = (expression) => {
+        if (!expression || expression.trim() === '') return expression
+        // Replace bX or BX (where X is a number) with asset_bX or asset_BX
+        // Only replace if not already prefixed with an asset name (word_bX pattern)
+        return expression.replace(/(?<!\w)([bB])(\d+)/g, 'asset_$1$2')
+    }
+
     let layerUrl = L_.getUrl(layerObj.type, layerObj.url, layerObj)
 
     let splitColonType
@@ -1158,13 +1181,17 @@ async function makeTileLayer(layerObj) {
                 splitColonType = splitColonLayerUrl[0]
                 const splitParams = splitColonLayerUrl[1].split('?')
 
-                // Bands
-                bandsParam = ''
-                b = layerObj.cogBands
-                if (b != null) {
-                    b.forEach((band) => {
-                        if (band != null) bandsParam += `&bidx=${band}`
-                    })
+                // Bands parameter (expression will be added dynamically in getTileUrl)
+                let bandsParamStac = ''
+
+                // Only add bands if no expression exists (expression takes precedence)
+                if (!layerObj.cogExpression || layerObj.cogExpression.trim() === '') {
+                    b = layerObj.cogBands
+                    if (b != null) {
+                        b.forEach((band) => {
+                            if (band != null) bandsParamStac += `&bidx=${band}`
+                        })
+                    }
                 }
 
                 // Resampling
@@ -1179,18 +1206,23 @@ async function makeTileLayer(layerObj) {
                     splitParams[0]
                 }/tiles/${
                     layerObj.tileMatrixSet || 'WebMercatorQuad'
-                }/{z}/{x}/{y}?assets=asset${bandsParam}${resamplingParam}`
+                }/{z}/{x}/{y}?assets=asset${bandsParamStac}${resamplingParam}`
                 layerObj.tileformat = 'wmts'
                 break
             case 'COG':
                 splitColonType = splitColonLayerUrl[0]
-                // Bands
+
+                // Bands parameter (expression will be added dynamically in getTileUrl)
                 bandsParam = ''
-                b = layerObj.cogBands
-                if (b != null) {
-                    b.forEach((band) => {
-                        if (band != null) bandsParam += `&bidx=${band}`
-                    })
+
+                // Only add bands if no expression exists (expression takes precedence)
+                if (!layerObj.cogExpression || layerObj.cogExpression.trim() === '') {
+                    b = layerObj.cogBands
+                    if (b != null) {
+                        b.forEach((band) => {
+                            if (band != null) bandsParam += `&bidx=${band}`
+                        })
+                    }
                 }
 
                 resamplingParam = ''
@@ -1259,6 +1291,8 @@ async function makeTileLayer(layerObj) {
         cogMax: layerObj.cogMax,
         currentCogMax: layerObj.currentCogMax,
         cogColormap: layerObj.cogColormap,
+        cogExpression: layerObj.cogExpression,
+        currentCogExpression: layerObj.currentCogExpression,
         variables: layerObj.variables || {},
     })
 
@@ -1770,21 +1804,27 @@ function makeVideoLayer(layerObj) {
         )
 
         // Add updateFilter function to video layer for CSS filter support
-        L_.layers.layer[layerObj.name].updateFilter = function(filterArray) {
+        L_.layers.layer[layerObj.name].updateFilter = function (filterArray) {
             const videoElement = this.getElement()
             if (videoElement) {
                 let cssFilters = []
 
-                filterArray.forEach(filter => {
+                filterArray.forEach((filter) => {
                     const [property, value] = filter.split(':')
                     // Skip blend mode for videos - only handle CSS filters
                     if (property !== 'mix-blend-mode') {
                         if (property === 'saturate') {
-                            cssFilters.push(`saturate(${parseFloat(value) * 100}%)`)
+                            cssFilters.push(
+                                `saturate(${parseFloat(value) * 100}%)`
+                            )
                         } else if (property === 'brightness') {
-                            cssFilters.push(`brightness(${parseFloat(value) * 100}%)`)
+                            cssFilters.push(
+                                `brightness(${parseFloat(value) * 100}%)`
+                            )
                         } else if (property === 'contrast') {
-                            cssFilters.push(`contrast(${parseFloat(value) * 100}%)`)
+                            cssFilters.push(
+                                `contrast(${parseFloat(value) * 100}%)`
+                            )
                         }
                     }
                 })

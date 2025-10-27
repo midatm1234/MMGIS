@@ -2,6 +2,7 @@
 import F_ from '../Formulae_/Formulae_'
 import Description from '../../Ancillary/Description'
 import Search from '../../Ancillary/Search'
+import Attributions from '../../Ancillary/Attributions'
 import ToolController_ from '../../Basics/ToolController_/ToolController_'
 import LayerGeologic from './LayerGeologic/LayerGeologic'
 import $ from 'jquery'
@@ -298,6 +299,11 @@ const L_ = {
 
         // Always reupdate layer infos at the end to keep them in sync
         Description.updateInfo()
+
+        // Update attributions display
+        if (typeof Attributions !== 'undefined' && Attributions.update) {
+            Attributions.update()
+        }
 
         // Deselect active feature if its layer is being turned off
         if (L_.activeFeature && L_.activeFeature.layerName === s.name && on) {
@@ -2886,8 +2892,8 @@ const L_ = {
         if (layerName in L_.layers.layer) {
             const layerObj = L_.layers.data[layerName]
             if (L_._layersBeingMade[layerName] === true) {
-                console.error(
-                    `ERROR - updateVectorLayer: Cannot make layer ${layerObj.display_name}/${layerObj.name} as it's already being made!`
+                console.warn(
+                    `WARNING - updateVectorLayer: Cannot make layer ${layerObj.display_name}/${layerObj.name} as it's already being made!`
                 )
                 return false
             }
@@ -3653,9 +3659,14 @@ async function parseConfig(configData, urlOnLayers) {
             )
     }
 
-    L_.mission = L_.configData.msv.mission
+    // Use DB mission name for L_.mission (for deeplinks)
+    // This will be set from the API response's mission field
+    // For now, keep backward compatibility
+    L_.mission = L_.configData._dbMissionName || L_.configData.msv.mission
     L_.recentMissions.unshift(L_.mission)
-    L_.missionPath = 'Missions/' + L_.configData.msv.mission + '/'
+    // Use missionFolderName if available, otherwise fallback to msv.mission
+    L_.missionFolderName = L_.configData.msv.missionFolderName || L_.configData.msv.mission
+    L_.missionPath = 'Missions/' + L_.missionFolderName + '/'
     L_.site = L_.configData.msv.site
 
     L_.view = [

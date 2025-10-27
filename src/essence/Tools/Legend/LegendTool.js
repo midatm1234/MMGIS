@@ -241,6 +241,32 @@ function drawLegendHeader() {
     tools.style('background', 'var(--color-k)')
     //Clear it
     tools.selectAll('*').remove()
+    
+    // Add CSS to make tooltips appear faster
+    if (!document.getElementById('legend-tooltip-styles')) {
+        const style = document.createElement('style')
+        style.id = 'legend-tooltip-styles'
+        style.textContent = `
+            [title] {
+                transition-delay: 0s !important;
+            }
+            [title]:hover::after {
+                content: attr(title);
+                position: absolute;
+                background: rgba(0, 0, 0, 0.8);
+                color: white;
+                padding: 4px 8px;
+                border-radius: 4px;
+                font-size: 12px;
+                white-space: nowrap;
+                z-index: 1000;
+                pointer-events: none;
+                margin-top: -25px;
+                margin-left: 10px;
+            }
+        `
+        document.head.appendChild(style)
+    }
     tools
         .append('div')
         .style('height', '30px')
@@ -283,8 +309,11 @@ function drawLegends(tools, _legend, layerUUID, display_name, opacity, shift) {
 
     const isHeader = layerConfig.type === 'header'
 
+    // Orientation of the legend, 'vertical' (default) or 'horizontal'
+    const orientation = layerConfig.variables?.legendOrientation || 'vertical'
+
     // If option to hide layer name in legend is checked in the configuration
-    const hideLegendLayerName = layerConfig.variables?.hideLegendLayerName || false;
+    const hideLegendLayerName = layerConfig.variables?.hideLegendLayerName || false
 
     var c = tools
         .append('div')
@@ -308,7 +337,7 @@ function drawLegends(tools, _legend, layerUUID, display_name, opacity, shift) {
 
     if (isHeader) return
 
-    let lastContinues = []
+    let legendEntries = []
     let lastShape = ''
 
     // Check if _legend is an image URL (string)
@@ -366,29 +395,31 @@ function drawLegends(tools, _legend, layerUUID, display_name, opacity, shift) {
             ? _legend[d].shapeIcon : _legend[d].shape
         if (shape == 'continuous' || shape == 'discreet') {
             if (lastShape != shape) {
-                if (lastContinues.length > 0) {
-                    pushScale(lastContinues)
-                    lastContinues = []
+                if (legendEntries.length > 0) {
+                    pushScale(legendEntries)
+                    legendEntries = []
                 }
             }
-            lastContinues.push({
+            legendEntries.push({
                 color: _legend[d].color,
                 shape: shape,
                 value: _legend[d].value,
+                propertyValue: _legend[d].propertyValue,
             })
             lastShape = shape
         } else {
 
             // finalize discreet and continuous
-            if (lastContinues.length > 0) {
-                pushScale(lastContinues)
-                lastContinues = []
+            if (legendEntries.length > 0) {
+                pushScale(legendEntries)
+                legendEntries = []
             }
             var r = c
                 .append('div')
                 .attr('class', 'row')
                 .style('display', 'flex')
-                .style('margin', '0px 0px 8px 9px')
+                .style('margin', orientation === 'horizontal' ? '0px 8px 8px 0px' : '0px 0px 8px 9px')
+                .style('flex-direction', orientation === 'horizontal' ? 'row' : 'row')
 
             if (
                 shape == 'circle' ||
@@ -405,6 +436,9 @@ function drawLegends(tools, _legend, layerUUID, display_name, opacity, shift) {
                             .style('opacity', opacity)
                             .style('border', `1px solid ${_legend[d].strokecolor}`)
                             .style('border-radius', '50%')
+                            .style('position', 'relative')
+                            .style('cursor', 'crosshair')
+                            .attr('title', _legend[d].value)
                         break
                     case 'square':
                         r.append('div')
@@ -414,6 +448,9 @@ function drawLegends(tools, _legend, layerUUID, display_name, opacity, shift) {
                             .style('background', _legend[d].color)
                             .style('opacity', opacity)
                             .style('border', `1px solid ${_legend[d].strokecolor}`)
+                            .style('position', 'relative')
+                            .style('cursor', 'crosshair')
+                            .attr('title', _legend[d].value)
                         break
                     case 'rect':
                         r.append('div')
@@ -424,6 +461,9 @@ function drawLegends(tools, _legend, layerUUID, display_name, opacity, shift) {
                             .style('background', _legend[d].color)
                             .style('opacity', opacity)
                             .style('border', `1px solid ${_legend[d].strokecolor}`)
+                            .style('position', 'relative')
+                            .style('cursor', 'crosshair')
+                            .attr('title', _legend[d].value)
                         break
                     default:
                 }
@@ -440,104 +480,505 @@ function drawLegends(tools, _legend, layerUUID, display_name, opacity, shift) {
                         ? shape : L_.missionPath + shape})`)
                     .style('background-size', 'contain')
                     .style('background-repeat', 'no-repeat')
+                    .style('position', 'relative')
+                    .style('cursor', 'crosshair')
+                    .attr('title', _legend[d].value)
             } else { // try using shape from Material Design Icon (mdi) library    
-                r.append('div')
+                const iconContainer = r.append('div')
                     .attr('class', layerUUID + '_legendicon')
                     .style('width', '18px')
                     .style('height', '18px')
-                    .append('i')
-                        .attr('class', 'mdi mdi-18px mdi-' + shape)
-                        .style('color', _legend[d].color)
-                        .style('opacity', opacity)
-                        .style('border', `1px solid ${_legend[d].strokecolor}`)
+                    .style('position', 'relative')
+                    .style('cursor', 'crosshair')
+                    .attr('title', _legend[d].value)
+                
+                iconContainer.append('i')
+                    .attr('class', 'mdi mdi-18px mdi-' + shape)
+                    .style('color', _legend[d].color)
+                    .style('opacity', opacity)
+                    .style('border', `1px solid ${_legend[d].strokecolor}`)
             }
 
             r.append('div')
-            .style('margin-left', '5px')
+            .style('margin-left', orientation === 'horizontal' ? '8px' : '5px')
             .style('height', '100%')
             .style('line-height', '19px')
             .style('font-size', '14px')
             .style('overflow', 'hidden')
             .style('white-space', 'nowrap')
-            .style('max-width', '270px')
+            .style('max-width', orientation === 'horizontal' ? 'none' : '270px')
             .style('text-overflow', 'ellipsis')
             .attr('title', _legend[d].value)
             .text(_legend[d].value)
         }
     }
-    if (lastContinues.length > 0) {
-        pushScale(lastContinues)
-        lastContinues = []
+    if (legendEntries.length > 0) {
+        pushScale(legendEntries)
+        legendEntries = []
     }
 
-    function pushScale(lastContinues) {
+    function pushScale(legendEntries) {
         var r = c
             .append('div')
             .attr('class', 'row')
             .style('display', 'flex')
-            .style('margin', '0px 0px 8px 8px')
-        var gradient = r
+            .style('flex-direction', 'column')
+            .style('margin', orientation === 'horizontal' ? '8px 0px 8px 0px' : '0px 0px 8px 8px')
+            .style('width', '100%') // Ensure full width
+            .style('position', 'relative') // Add relative positioning for absolute positioned children
+
+        // Container for gradient and labels
+        var legendContainer = r
             .append('div')
-            .style('width', '19px')
-            .style('height', 19 * lastContinues.length + 'px')
+            .style('display', 'flex')
+            .style('flex-direction', orientation === 'horizontal' ? 'column' : 'row')
+            .style('align-items', orientation === 'horizontal' ? 'flex-start' : 'center')
+            .style('gap', orientation === 'horizontal' ? '4px' : '8px')
+            .style('width', orientation === 'horizontal' ? '320px' : 'auto') // Set to 320px for horizontal legends
+            .style('max-width', orientation === 'horizontal' ? '320px' : 'none') // Ensure it doesn't exceed 320px
+            .style('padding-left', orientation === 'horizontal' ? '8px' : '0px') // Add left padding to align with vertical legends
+
+        // Calculate gradient width based on container width and number of sections
+        const gradientWidth = orientation === 'horizontal' ? '100%' : '19px'
+        
+        var gradient = legendContainer
+            .append('div')
+            .style('width', gradientWidth)
+            .style('height', orientation === 'horizontal' ? '19px' : (19 * legendEntries.length + 'px'))
             .style('border', '1px solid black')
-        var values = r.append('div')
+            .style('flex-shrink', '0')
+            .style('position', 'relative')
+            .style('cursor', 'crosshair')
+
+        // For horizontal legends, ensure data is in ascending order (min to max)
+        // Source data is typically in descending order, so we reverse it for horizontal display
+        if (orientation === 'horizontal') {
+            legendEntries = [...legendEntries].reverse()
+        }
+
+        // Start with all legend entries, reduce labels if needed for horizontal legends
+        let visibleLabels = legendEntries
+
+        // Calculate available width per label in horizontal mode
+        const containerWidth = orientation === 'horizontal' ? 320 : 'auto'
+        let labelWidth = orientation === 'horizontal' ? (containerWidth / visibleLabels.length) : 'auto'
+        
+        // For horizontal legends, check if we need to reduce labels based on actual text overflow
+        if (orientation === 'horizontal') {
+            const maxWidth = 320
+            
+            // Calculate if labels would overflow with current setup
+            const maxLabelLength = Math.max(...visibleLabels.map(c => String(c.value).length))
+            const estimatedCharWidth = 7
+            const estimatedLabelWidth = maxLabelLength * estimatedCharWidth
+            const minViableWidth = estimatedLabelWidth * 0.6
+            
+            // Only reduce labels if the estimated width per label is too small
+            if (labelWidth < minViableWidth && visibleLabels.length > 2) {
+                const maxLabels = Math.floor(maxWidth / minViableWidth)
+                
+                if (visibleLabels.length > maxLabels) {
+                    // Always keep first and last labels
+                    const keepIndices = new Set([0, visibleLabels.length - 1])
+                    
+                    // Calculate how many intermediate labels we can show
+                    const intermediateSlots = Math.max(0, maxLabels - 2)
+                    
+                    if (intermediateSlots > 0) {
+                        // Distribute intermediate labels evenly
+                        const step = (visibleLabels.length - 1) / (intermediateSlots + 1)
+                        for (let i = 1; i <= intermediateSlots; i++) {
+                            const index = Math.round(i * step)
+                            if (index > 0 && index < visibleLabels.length - 1) {
+                                keepIndices.add(index)
+                            }
+                        }
+                    }
+                    
+                    // Create new array with only the selected labels
+                    visibleLabels = legendEntries.filter((_, index) => keepIndices.has(index))
+                    // Recalculate label width with reduced labels
+                    labelWidth = containerWidth / visibleLabels.length
+                }
+            }
+        }
+        
+        const calculateFontSize = () => {
+            if (orientation === 'horizontal') {
+                const maxLabelLength = Math.max(...visibleLabels.map(c => String(c.value).length))
+                const baseSize = 14
+                const minSize = 9
+                const maxSize = 14
+                const averageCharWidth = 7
+                const availableWidth = labelWidth * 0.95 // Use more of the available space
+                const calculatedSize = (availableWidth / (maxLabelLength * averageCharWidth)) * baseSize
+                return Math.min(maxSize, Math.max(minSize, calculatedSize))
+            }
+            return 14
+        }
+
+        const fontSize = calculateFontSize()
+
+        var values = legendContainer
+            .append('div')
+            .style('display', (orientation === 'horizontal' && legendEntries[0].shape === 'continuous') ? 'block' : 'flex')
+            .style('flex-direction', orientation === 'horizontal' ? 'row' : 'column')
+            .style('justify-content', 'flex-start') // Left justify
+            .style('width', orientation === 'horizontal' ? '100%' : 'auto')
+            .style('height', orientation === 'horizontal' ? 'auto' : (19 * visibleLabels.length + 'px'))
+            .style('gap', orientation === 'horizontal' ? '0' : '0')
+            .style('position', 'relative')
+            .style('padding-left', (orientation === 'horizontal' && legendEntries[0].shape === 'continuous') ? '8px' : '0px')
+            .style('padding-right', (orientation === 'horizontal' && legendEntries[0].shape === 'continuous') ? '8px' : '0px')
+            .style('padding-bottom', (orientation === 'horizontal' && legendEntries[0].shape === 'continuous') ? '12px' : '0px')
+
+        // Create gradient using all legend entries for accurate color representation
         var gradientArray = []
-        for (let i = 0; i < lastContinues.length; i++) {
-            let v = values
-                .append('div')
-                .style('margin-left', '5px')
-                .style('height', '19px')
-                .style('line-height', '19px')
-                .style('font-size', '14px')
-                .style('position', 'relative')
-                .style('white-space', 'nowrap')
-                .text(lastContinues[i].value)
-
-            if (lastContinues[i].shape == 'continuous') {
-                v.append('div')
-                    .style('position', 'absolute')
-                    .style('width', '3px')
-                    .style('height', '1px')
-                    .style('background', 'white')
-                    .style('left', '-23px')
-                    .style('top', '10px')
-                    .style('mix-blend-mode', 'difference')
-                v.append('div')
-                    .style('position', 'absolute')
-                    .style('width', '3px')
-                    .style('height', '1px')
-                    .style('background', 'white')
-                    .style('left', '-9px')
-                    .style('top', '10px')
-                    .style('mix-blend-mode', 'difference')
-
-                let color = lastContinues[i].color
+        for (let i = 0; i < legendEntries.length; i++) {
+            if (legendEntries[i].shape == 'continuous') {
+                let color = legendEntries[i].color
                 if (i === 0)
-                    color += ' ' + (1 / lastContinues.length) * 50 + '%'
-                else if (i === lastContinues.length - 1)
-                    color += ' ' + (100 - (1 / lastContinues.length) * 50) + '%'
+                    color += ' ' + (1 / legendEntries.length) * 50 + '%'
+                else if (i === legendEntries.length - 1)
+                    color += ' ' + (100 - (1 / legendEntries.length) * 50) + '%'
                 gradientArray.push(color)
             } else {
                 gradientArray.push(
-                    lastContinues[i].color +
+                    legendEntries[i].color +
                         ' ' +
-                        (i / lastContinues.length) * 100 +
+                        (i / legendEntries.length) * 100 +
                         '%'
                 )
                 gradientArray.push(
-                    lastContinues[i].color +
+                    legendEntries[i].color +
                         ' ' +
-                        ((i + 1) / lastContinues.length) * 100 +
+                        ((i + 1) / legendEntries.length) * 100 +
                         '%'
                 )
             }
         }
 
+        // Helper function to detect and extract units from legend values
+        const extractUnits = (values) => {
+            if (!values || values.length === 0) return { number: '', units: '' }
+            
+            const firstValue = String(values[0]).trim()
+            
+            // Find where non-numeric characters start
+            const match = firstValue.match(/^([0-9.,\-\s]+)(.*)$/)
+            if (match) {
+                const number = match[1].trim()
+                const units = match[2].trim()
+                
+                // Verify this pattern works for all values
+                const allValuesMatch = values.every(v => {
+                    const str = String(v).trim()
+                    const valMatch = str.match(/^([0-9.,\-\s]+)(.*)$/)
+                    return valMatch && valMatch[2].trim() === units
+                })
+                
+                if (allValuesMatch) {
+                    return { number, units }
+                }
+            }
+            
+            // No common units found
+            return { number: firstValue, units: '' }
+        }
+
+        // Add tick marks only for continuous legends
+        if (legendEntries.length > 0 && legendEntries[0].shape === 'continuous') {
+            for (let i = 0; i < visibleLabels.length; i++) {
+                // Calculate position for this tick mark
+                // For continuous legends, find the index in legendEntries
+                const originalIndex = legendEntries.findIndex(item => 
+                    item.value === visibleLabels[i].value && item.color === visibleLabels[i].color)
+                let tickPosition
+                if (originalIndex !== -1) {
+                    tickPosition = originalIndex / (legendEntries.length - 1)
+                } else {
+                    tickPosition = i / (visibleLabels.length - 1)
+                }
+
+                // Create tick mark
+                const tickMark = gradient
+                    .append('div')
+                    .style('position', 'absolute')
+                    .style('background', 'white')
+                    .style('mix-blend-mode', 'difference')
+                    .style('pointer-events', 'none')
+                    .style('z-index', '10')
+
+                if (orientation === 'horizontal') {
+                    // Horizontal tick marks
+                    tickMark
+                        .style('width', '1px')
+                        .style('height', '3px')
+                        .style('left', `${tickPosition * 100}%`)
+                        .style('top', '0px')
+                        .style('transform', 'translateX(-50%)')
+                    
+                    // Add a bottom tick mark for better visibility
+                    gradient
+                        .append('div')
+                        .style('position', 'absolute')
+                        .style('width', '1px')
+                        .style('height', '3px')
+                        .style('background', 'white')
+                        .style('mix-blend-mode', 'difference')
+                        .style('pointer-events', 'none')
+                        .style('z-index', '10')
+                        .style('left', `${tickPosition * 100}%`)
+                        .style('bottom', '0px')
+                        .style('transform', 'translateX(-50%)')
+                } else {
+                    // Vertical tick marks
+                    tickMark
+                        .style('width', '3px')
+                        .style('height', '1px')
+                        .style('top', `${tickPosition * 100}%`)
+                        .style('left', '0px')
+                        .style('transform', 'translateY(-50%)')
+                    
+                    // Add a right tick mark for better visibility
+                    gradient
+                        .append('div')
+                        .style('position', 'absolute')
+                        .style('width', '3px')
+                        .style('height', '1px')
+                        .style('background', 'white')
+                        .style('mix-blend-mode', 'difference')
+                        .style('pointer-events', 'none')
+                        .style('z-index', '10')
+                        .style('top', `${tickPosition * 100}%`)
+                        .style('right', '0px')
+                        .style('transform', 'translateY(-50%)')
+                }
+            }
+            
+            // Add units label above the last tick mark for horizontal continuous legends
+            if (orientation === 'horizontal') {
+                // Extract units from all visible labels
+                const values = visibleLabels.map(item => item.value)
+                const { units } = extractUnits(values)
+                
+                if (units) {
+                    // Calculate position of last tick mark
+                    const lastIndex = visibleLabels.length - 1
+                    const lastOriginalIndex = legendEntries.findIndex(item => 
+                        item.value === visibleLabels[lastIndex].value && item.color === visibleLabels[lastIndex].color)
+                    const lastTickPosition = lastOriginalIndex !== -1 ? 
+                        lastOriginalIndex / (legendEntries.length - 1) : 
+                        lastIndex / (visibleLabels.length - 1)
+                    
+                    // Add units label above the last tick mark
+                    gradient
+                        .append('div')
+                        .style('position', 'absolute')
+                        .style('right', '0px')
+                        .style('top', '-20px')
+                        .style('font-size', '12px')
+                        .style('color', 'var(--color-f)')
+                        .style('text-align', 'right')
+                        .style('white-space', 'nowrap')
+                        .style('z-index', '100')
+                        .style('background', 'var(--color-k)')
+                        .style('padding', '2px 4px')
+                        .style('border-radius', '2px')
+                        .text(units)
+                }
+            }
+        }
+        
+        // Add units label for non-continuous horizontal legends
+        if (orientation === 'horizontal' && (legendEntries.length === 0 || legendEntries[0].shape !== 'continuous')) {
+            // Extract units from all visible labels
+            const values = visibleLabels.map(item => item.value)
+            const { units } = extractUnits(values)
+
+            if (units) {
+                const unitsLabel = r
+                    .append('div')
+                    .style('position', 'absolute')
+                    .style('top', '-20px')
+                    .style('right', '8px')
+                    .style('font-size', '12px')
+                    .style('color', 'var(--color-f)')
+                    .style('text-align', 'right')
+                    .style('white-space', 'nowrap')
+                    .style('z-index', '100')
+                    .style('background', 'var(--color-k)')
+                    .style('padding', '2px 4px')
+                    .style('border-radius', '2px')
+                    .text(units)
+            }
+        }
+
+        // Create labels using only the visible subset
+        for (let i = 0; i < visibleLabels.length; i++) {
+            // Determine if this is first or last label
+            const isFirstOrLast = i === 0 || i === visibleLabels.length - 1
+            
+            // Extract number and units from the value
+            const str = String(visibleLabels[i].value).trim()
+            
+            // Find where non-numeric characters start
+            const match = str.match(/^([0-9.,\-\s]+)(.*)$/)
+            let number, units
+            if (match) {
+                number = match[1].trim()
+                units = match[2].trim()
+            } else {
+                // Fallback: no units found
+                number = str
+                units = ''
+            }
+            
+            // For horizontal legends, show only numbers (units are displayed separately above)
+            let displayText
+            if (orientation === 'horizontal') {
+                displayText = number
+            } else {
+                // For vertical legends, show numbers only except for the first and last labels which keep units
+                if (i === 0 || i === visibleLabels.length - 1) {
+                    displayText = visibleLabels[i].value // Keep full value with units for first and last labels
+                } else {
+                    displayText = number // Show only number for intermediate labels
+                }
+            }
+
+            // Calculate the same position as the tick marks
+            let labelPosition
+            if (visibleLabels[i].shape === 'continuous') {
+                // For continuous legends, find the index in legendEntries
+                const originalIndex = legendEntries.findIndex(item => 
+                    item.value === visibleLabels[i].value && item.color === visibleLabels[i].color)
+                if (originalIndex !== -1) {
+                    labelPosition = originalIndex / (legendEntries.length - 1)
+                } else {
+                    labelPosition = i / (visibleLabels.length - 1)
+                }
+            } else {
+                labelPosition = i / (visibleLabels.length - 1)
+            }
+
+            let v = values
+                .append('div')
+                .style('margin', '0')
+                .style('padding', '0')
+                .style('height', '19px')
+                .style('line-height', '19px')
+                .style('font-size', `${fontSize}px`)
+                .style('white-space', 'nowrap')
+                .style('overflow', 'hidden')
+                .style('text-overflow', 'ellipsis')
+                .attr('title', visibleLabels[i].value) // Keep full value in tooltip
+                .text(displayText)
+
+            if (orientation === 'horizontal' && visibleLabels[i].shape === 'continuous') {
+                // Position labels to align exactly with tick marks for continuous legends only
+                // Adjust positioning to prevent leftmost labels from extending outside container
+                let adjustedPosition = labelPosition
+                let transform = 'translateX(-50%)'
+                
+                // For first label, shift it right to prevent left overflow
+                if (i === 0 && labelPosition < 0.1) {
+                    transform = 'translateX(0%)'
+                }
+                // Keep last label center-justified (no special transform)
+                
+                v.style('position', 'absolute')
+                 .style('left', `${adjustedPosition * 100}%`)
+                 .style('transform', transform)
+                 .style('text-align', 'center')
+                 .style('width', 'auto')
+                 .style('max-width', '80px') // Prevent overlap
+            } else if (orientation === 'horizontal') {
+                // For non-continuous horizontal legends, use original layout
+                v.style('position', 'relative')
+                 .style('text-align', visibleLabels[i].shape === 'continuous' ? 
+                     (i === 0 ? 'left' : i === visibleLabels.length - 1 ? 'right' : 'center') : 
+                     'center')
+                 .style('width', `${100/visibleLabels.length}%`)
+            } else {
+                // For vertical legends, keep original positioning
+                v.style('position', 'relative')
+                 .style('text-align', 'left')
+                 .style('width', 'auto')
+            }
+        }
+
         gradient.style(
             'background',
-            'linear-gradient(to bottom, ' + gradientArray.join(',') + ')'
+            orientation === 'horizontal'
+                ? 'linear-gradient(to right, ' + gradientArray.join(',') + ')'
+                : 'linear-gradient(to bottom, ' + gradientArray.join(',') + ')'
         )
+
+        // Add hover functionality for gradient legends
+        const tooltip = gradient
+            .append('div')
+            .style('position', 'absolute')
+            .style('background', 'rgba(0, 0, 0, 0.8)')
+            .style('color', 'white')
+            .style('padding', '4px 8px')
+            .style('border-radius', '4px')
+            .style('font-size', '12px')
+            .style('pointer-events', 'none')
+            .style('z-index', '1000')
+            .style('visibility', 'hidden')
+            .style('white-space', 'nowrap')
+
+        gradient
+            .on('mousemove', function(event) {
+                const rect = this.getBoundingClientRect()
+                let position, value
+                
+                if (orientation === 'horizontal') {
+                    const x = event.clientX - rect.left
+                    position = x / rect.width
+                } else {
+                    const y = event.clientY - rect.top
+                    position = y / rect.height // Top = min (index 0), bottom = max (index max)
+                }
+                
+                // Clamp position between 0 and 1
+                position = Math.max(0, Math.min(1, position))
+                
+                // Calculate the value based on position
+                if (legendEntries[0].shape === 'continuous') {
+                    // For continuous legends, interpolate between values
+                    const index = position * (legendEntries.length - 1)
+                    const lowerIndex = Math.floor(index)
+                    const upperIndex = Math.ceil(index)
+                    const fraction = index - lowerIndex
+                    
+                    if (lowerIndex === upperIndex) {
+                        // Prioritize propertyValue, if it exists, over value
+                        value = legendEntries[lowerIndex].propertyValue || legendEntries[lowerIndex].value
+                    } else {
+                        // Interpolate between continuous values
+                        const lowerValue = parseFloat(legendEntries[lowerIndex].propertyValue || legendEntries[lowerIndex].value) || 0
+                        const upperValue = parseFloat(legendEntries[upperIndex].propertyValue || legendEntries[upperIndex].value) || 0
+                        const interpolatedValue = lowerValue + (upperValue - lowerValue) * fraction
+                        value = interpolatedValue.toFixed(3).replace(/\.?0+$/, '') // Remove trailing zeros
+                    }
+                } else {
+                    // For discrete legends, map position to discrete bands
+                    const bandIndex = Math.floor(position * legendEntries.length)
+                    const clampedIndex = Math.min(bandIndex, legendEntries.length - 1)
+                    value = legendEntries[clampedIndex].propertyValue || legendEntries[clampedIndex].value
+                }
+                
+                tooltip
+                    .style('visibility', 'visible')
+                    .style('left', (event.clientX - rect.left - 15) + 'px')
+                    .style('top', (event.clientY - rect.top - 30) + 'px')
+                    .text(value)
+            })
+            .on('mouseleave', function() {
+                tooltip.style('visibility', 'hidden')
+            })
     }
 }
 

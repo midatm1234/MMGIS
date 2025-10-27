@@ -457,7 +457,16 @@
               "name": "Legend From URL",
               "description": "A URL to a static image or .csv with the following header: 'color,strokecolor,shape,value'. If the path is relative, it will be relative to the mission's directory. This legend is overridden if a legend is also configured below.",
               "type": "text",
-              "width": 10
+              "width": 8
+            },
+            {
+              "new": true,
+              "field": "variables.legendOrientation",
+              "name": "Legend Orientation",
+              "description": "Displays the legend horizontally or vertically.",
+              "type": "dropdown",
+              "width": 2,
+              "options": ["vertical", "horizontal"]
             },
             {
               "new": true,

@@ -3,6 +3,8 @@ const {
   responseInterceptor,
 } = require("http-proxy-middleware");
 
+const logger = require("../API/logger");
+
 function initAdjacentServersProxy(app, isDocker, ensureAdmin) {
   ///////////////////////////
   // Proxies
@@ -113,6 +115,100 @@ function initAdjacentServersProxy(app, isDocker, ensureAdmin) {
       })
     );
   }
+
+  // Custom Adjacent Servers
+  setupCustomAdjacentServers(app, isDocker, ensureAdmin);
+}
+
+/**
+ * Sets up custom adjacent servers based on environment variables
+ * Format: ADJACENT_SERVER_CUSTOM_X=["isEnabled", "routeName", "serviceName", "port"]
+ * Example: ADJACENT_SERVER_CUSTOM_0=["true", "frozon_api", "frozon_api", "8104"]
+ */
+function setupCustomAdjacentServers(app, isDocker, ensureAdmin) {
+  const customServerPrefix = "ADJACENT_SERVER_CUSTOM_";
+
+  // Find all custom server environment variables
+  const customServerEnvs = Object.keys(process.env)
+    .filter((key) => key.startsWith(customServerPrefix))
+    .sort(); // Sort to ensure consistent processing order
+
+  customServerEnvs.forEach((envKey) => {
+    try {
+      const configValue = process.env[envKey];
+      if (!configValue) return;
+
+      // Parse the JSON array configuration
+      const config = JSON.parse(configValue);
+
+      if (!Array.isArray(config) || config.length !== 4) {
+        logger(
+          "warn",
+          `Invalid configuration for ${envKey}: Expected array with 4 elements [isEnabled, routeName, serviceName, port]`
+        );
+        return;
+      }
+
+      const [isEnabled, routeName, serviceName, port] = config;
+
+      // Convert isEnabled to boolean
+      const enabled = String(isEnabled).toLowerCase() === "true";
+
+      if (!enabled) {
+        logger("warn", `Custom adjacent server '${routeName}' is disabled`);
+        return;
+      }
+
+      // Validate configuration
+      if (!routeName || !serviceName || !port) {
+        logger(
+          "warn",
+          `Invalid configuration for ${envKey}: routeName, serviceName, and port are required`
+        );
+        return;
+      }
+
+      // Setup the custom adjacent server
+      setupCustomAdjacentServer(app, isDocker, ensureAdmin, {
+        routeName: String(routeName),
+        serviceName: String(serviceName),
+        port: parseInt(port, 10),
+      });
+
+      logger(
+        "info",
+        `Custom adjacent server '${routeName}' configured on port ${port}`
+      );
+    } catch (error) {
+      logger(
+        "error",
+        `Error parsing configuration for ${envKey}:`,
+        error.message
+      );
+    }
+  });
+}
+
+/**
+ * Sets up a single custom adjacent server
+ */
+function setupCustomAdjacentServer(app, isDocker, ensureAdmin, config) {
+  const { routeName, serviceName, port } = config;
+
+  const target = `http://${isDocker ? serviceName : "localhost"}:${port}`;
+  const routePath = `${process.env.ROOT_PATH || ""}/${routeName}`;
+
+  app.use(
+    routePath,
+    ensureAdmin(false, false, true), // true to allow all GETs - others require admin auth
+    createProxyMiddleware({
+      target: target,
+      changeOrigin: true,
+      pathRewrite: {
+        [`^${process.env.ROOT_PATH || ""}/${routeName}`]: "",
+      },
+    })
+  );
 }
 
 const createSwaggerInterceptor = (path, target) => {

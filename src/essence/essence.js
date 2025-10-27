@@ -35,6 +35,8 @@ import Description from './Ancillary/Description'
 import ScaleBar from './Ancillary/ScaleBar'
 import ScaleBox from './Ancillary/ScaleBox'
 import Compass from './Ancillary/Compass'
+import MapLogo from './Ancillary/MapLogo'
+import Attributions from './Ancillary/Attributions'
 //import Swap from './Ancillary/Swap'
 import QueryURL from './Ancillary/QueryURL'
 import TimeControl from './Ancillary/TimeControl'
@@ -207,7 +209,8 @@ var essence = {
             if (data.data) {
                 try {
                     const parsed = JSON.parse(data.data)
-                    const mission = essence.configData.msv.mission
+                    // Use DB mission name for comparison (L_.mission now contains DB name)
+                    const mission = L_.mission || essence.configData.msv.mission
 
                     if (
                         !parsed.body.mission ||
@@ -228,8 +231,15 @@ var essence = {
                                 'get',
                                 {
                                     mission,
+                                    full: true,
                                 },
-                                async function (data) {
+                                async function (response) {
+                                    // Extract DB mission name and attach to config
+                                    const data = response.config || response
+                                    if (response.mission) {
+                                        data._dbMissionName = response.mission
+                                    }
+
                                     if (Array.isArray(layerName)) {
                                         // If we're adding an array of new layers, add each layer to the queue individually
                                         for (let layer in layerName) {
@@ -316,10 +326,12 @@ var essence = {
             (urlSplit[1] && urlSplit[1].split('=')[0] === '_preview')
         ) {
             //then no parameters or old ones
+            // Use DB mission name for deeplinks (config._dbMissionName if available)
+            const missionForUrl = config._dbMissionName || config.msv.mission
             url =
                 window.location.href.split('?')[0] +
                 '?mission=' +
-                config.msv.mission
+                missionForUrl
             window.history.replaceState('', '', url)
             L_.url = window.location.href
         }
@@ -372,11 +384,15 @@ var essence = {
         if (!swapping) {
             Description.init(L_.mission, L_.site, Map_, L_)
             ScaleBar.init(ScaleBox)
+            MapLogo.init(L_.configData.look)
             Compass.init()
+            Attributions.init()
         } else {
             Coordinates.refresh()
             ScaleBar.refresh()
+            MapLogo.refresh()
             Compass.refresh()
+            Attributions.refresh()
         }
 
         //Swap.make(this)
@@ -421,9 +437,15 @@ var essence = {
                 'get',
                 {
                     mission: to,
+                    full: true,
                 },
-                function (data) {
-                    essence.makeMission(data)
+                function (response) {
+                    // Extract DB mission name and attach to config
+                    const config = response.config || response
+                    if (response.mission) {
+                        config._dbMissionName = response.mission
+                    }
+                    essence.makeMission(config)
                 },
                 function (e) {
                     console.log(
