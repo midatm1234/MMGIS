@@ -139,8 +139,15 @@ var TimeControl = {
             layer = L_.layers.data[layer]
         }
         if (layer.time && layer.time.enabled == true) {
-            layer.time.start = startTime
-            layer.time.end = endTime
+            const normalizedTimes = normalizeLayerTimes(
+                layer,
+                startTime,
+                endTime
+            )
+            layer.time.start = normalizedTimes.start
+            layer.time.end = normalizedTimes.end
+            layer.time._startMs = normalizedTimes.startMs
+            layer.time._endMs = normalizedTimes.endMs
             layer.time.customTimes = TimeControl.customTimes
             d3.select('.starttime.' + F_.getSafeName(layer.name)).text(
                 layer.time.start
@@ -503,8 +510,15 @@ var TimeControl = {
         for (let layerName in L_.layers.data) {
             const layer = L_.layers.data[layerName]
             if (layer.time && layer.time.enabled === true) {
-                layer.time.start = TimeControl.startTime
-                layer.time.end = TimeControl.currentTime
+                const normalizedTimes = normalizeLayerTimes(
+                    layer,
+                    TimeControl.startTime,
+                    TimeControl.currentTime
+                )
+                layer.time.start = normalizedTimes.start
+                layer.time.end = normalizedTimes.end
+                layer.time._startMs = normalizedTimes.startMs
+                layer.time._endMs = normalizedTimes.endMs
                 layer.time.customTimes = TimeControl.customTimes
                 d3.select('.starttime.' + F_.getSafeName(layer.name)).text(
                     layer.time.start
@@ -557,23 +571,160 @@ var TimeControl = {
         const l = L_.layers.layer[layer.name]
 
         if (l != null && layer.type === 'tile') {
-            l.options.time = layerTimeFormat(Date.parse(layer.time.end))
-            l.options.starttime = layerTimeFormat(Date.parse(layer.time.start))
-            l.options.endtime = layerTimeFormat(Date.parse(layer.time.end))
+            const normalizedTimes = normalizeLayerTimes(
+                layer,
+                layer.time.start,
+                layer.time.end
+            )
+            layer.time.start = normalizedTimes.start
+            layer.time.end = normalizedTimes.end
+            layer.time._startMs = normalizedTimes.startMs
+            layer.time._endMs = normalizedTimes.endMs
+
+            let endMs = normalizedTimes.endMs
+            let startMs = normalizedTimes.startMs
+            if (!Number.isFinite(endMs)) {
+                endMs = Date.parse(layer.time.end)
+            }
+            if (!Number.isFinite(startMs)) {
+                startMs = Date.parse(layer.time.start)
+            }
+            if (!Number.isFinite(endMs)) {
+                endMs = Date.now()
+            }
+            if (!Number.isFinite(startMs)) {
+                startMs = endMs
+            }
+            if (startMs > endMs) startMs = endMs
+
+            l.options.time = layerTimeFormat(endMs)
+            l.options.starttime = layerTimeFormat(startMs)
+            l.options.endtime = layerTimeFormat(endMs)
         }
     },
+}
+
+function normalizeLayerTimes(layer, startTime, endTime) {
+    const startMsRaw = parseTimeToMs(startTime)
+    const endMsRaw = parseTimeToMs(endTime)
+
+    if (!layer?.time) {
+        return {
+            start: startTime,
+            end: endTime,
+            startMs: startMsRaw,
+            endMs: endMsRaw,
+        }
+    }
+
+    const bounds = getLayerTimeBounds(layer)
+    if (!bounds) {
+        return {
+            start: startTime,
+            end: endTime,
+            startMs: startMsRaw,
+            endMs: endMsRaw,
+        }
+    }
+
+    let endMs = clampTimeValue(endMsRaw, bounds, bounds.max ?? bounds.min ?? endMsRaw)
+    let startMs = clampTimeValue(
+        startMsRaw,
+        bounds,
+        Number.isFinite(startMsRaw) ? startMsRaw : endMs
+    )
+    if (startMs > endMs) startMs = endMs
+
+    return {
+        start: msToISOString(startMs),
+        end: msToISOString(endMs),
+        startMs,
+        endMs,
+    }
+}
+
+function clampTimeValue(value, bounds, fallback) {
+    let result = Number.isFinite(value) ? value : fallback
+    if (!Number.isFinite(result)) {
+        if (Number.isFinite(bounds?.max)) result = bounds.max
+        else if (Number.isFinite(bounds?.min)) result = bounds.min
+        else result = Date.now()
+    }
+    if (Number.isFinite(bounds?.min) && result < bounds.min) result = bounds.min
+    if (Number.isFinite(bounds?.max) && result > bounds.max) result = bounds.max
+    return result
+}
+
+function getLayerTimeBounds(layer) {
+    if (!layer?.time) return null
+    const minCandidate =
+        layer.time.availableStart ??
+        layer.time.minAvailable ??
+        layer.time.min ??
+        layer.time.minTime ??
+        layer.time.minTimestamp
+    const maxCandidate =
+        layer.time.availableEnd ??
+        layer.time.maxAvailable ??
+        layer.time.max ??
+        layer.time.maxTime ??
+        layer.time.maxTimestamp
+    const minMs = parseTimeToMs(minCandidate)
+    const maxMs = parseTimeToMs(maxCandidate)
+    if (!Number.isFinite(minMs) && !Number.isFinite(maxMs)) return null
+    return {
+        min: Number.isFinite(minMs) ? minMs : null,
+        max: Number.isFinite(maxMs) ? maxMs : null,
+    }
+}
+
+function parseTimeToMs(value) {
+    if (value == null) return NaN
+    if (value instanceof Date) return value.getTime()
+    if (typeof value === 'number' && Number.isFinite(value)) return value
+    if (typeof value === 'string' && value.length > 0) {
+        const parsed = Date.parse(value)
+        if (!Number.isNaN(parsed)) return parsed
+        const compact = value.match(/^(\d{4})(\d{2})(\d{2})?$/)
+        if (compact) {
+            const year = Number(compact[1])
+            const month = Number(compact[2])
+            const day = compact[3] ? Number(compact[3]) : 1
+            if (
+                Number.isFinite(year) &&
+                Number.isFinite(month) &&
+                month >= 1 &&
+                month <= 12
+            ) {
+                return Date.UTC(year, month - 1, day)
+            }
+        }
+    }
+    return NaN
+}
+
+function msToISOString(ms) {
+    if (!Number.isFinite(ms)) return null
+    return new Date(ms).toISOString().split('.')[0] + 'Z'
 }
 
 function initLayerDataTimes() {
     for (let i in L_.layers.dataFlat) {
         const layer = L_.layers.dataFlat[i]
         if (layer.time && layer.time.enabled === true) {
-            layer.time.start = L_.FUTURES.startTime
-                ? L_.FUTURES.startTime.toISOString().split('.')[0] + 'Z'
-                : TimeControl.startTime
-            layer.time.end = L_.FUTURES.endTime
-                ? L_.FUTURES.endTime.toISOString().split('.')[0] + 'Z'
-                : TimeControl.endTime
+            const normalizedTimes = normalizeLayerTimes(
+                layer,
+                L_.FUTURES.startTime
+                    ? L_.FUTURES.startTime.toISOString().split('.')[0] + 'Z'
+                    : TimeControl.startTime,
+                L_.FUTURES.endTime
+                    ? L_.FUTURES.endTime.toISOString().split('.')[0] + 'Z'
+                    : TimeControl.endTime
+            )
+            layer.time.start = normalizedTimes.start
+            layer.time.end = normalizedTimes.end
+            layer.time._startMs = normalizedTimes.startMs
+            layer.time._endMs = normalizedTimes.endMs
             layer.time.customTimes = TimeControl.customTimes
         }
     }
@@ -583,12 +734,19 @@ function initLayerTimes() {
     for (let layerName in L_.layers.data) {
         const layer = L_.layers.data[layerName]
         if (layer.time && layer.time.enabled === true) {
-            layer.time.start = L_.FUTURES.startTime
-                ? L_.FUTURES.startTime.toISOString().split('.')[0] + 'Z'
-                : TimeControl.startTime
-            layer.time.end = L_.FUTURES.endTime
-                ? L_.FUTURES.endTime.toISOString().split('.')[0] + 'Z'
-                : TimeControl.endTime
+            const normalizedTimes = normalizeLayerTimes(
+                layer,
+                L_.FUTURES.startTime
+                    ? L_.FUTURES.startTime.toISOString().split('.')[0] + 'Z'
+                    : TimeControl.startTime,
+                L_.FUTURES.endTime
+                    ? L_.FUTURES.endTime.toISOString().split('.')[0] + 'Z'
+                    : TimeControl.endTime
+            )
+            layer.time.start = normalizedTimes.start
+            layer.time.end = normalizedTimes.end
+            layer.time._startMs = normalizedTimes.startMs
+            layer.time._endMs = normalizedTimes.endMs
             layer.time.customTimes = TimeControl.customTimes
             d3.select('.starttime.' + F_.getSafeName(layer.name)).text(
                 layer.time.start
