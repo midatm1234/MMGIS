@@ -1,9 +1,9 @@
 import $ from 'jquery'
-import * as d3 from 'd3'
+import { utcFormat } from 'd3-time-format'
 import F_ from '../Formulae_/Formulae_'
 import L_ from '../Layers_/Layers_'
 import calls from '../../../pre/calls'
-import TimeControl from '../../Ancillary/TimeControl'
+import TimeControl from '../TimeControl_/TimeControl'
 
 // This is so that an eariler and slower dynamic geodataset request
 // does not override an earlier shorter one
@@ -40,8 +40,8 @@ export const captureVector = (layerObj, options, cb, dynamicCb) => {
     // Give time enabled layers a default start and end time to avoid errors
     const layerTimeFormat =
         layerObj.time?.format == null || layerObj.time?.format == ''
-            ? d3.utcFormat('%Y-%m-%dT%H:%M:%SZ')
-            : d3.utcFormat(layerObj.time.format)
+            ? utcFormat('%Y-%m-%dT%H:%M:%SZ')
+            : utcFormat(layerObj.time.format)
 
     const startTime =
         layerObj.time == null || layerObj.time.start == ''

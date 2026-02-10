@@ -8,7 +8,6 @@ import DrawTool_FileModal from './DrawTool_FileModal'
 import DrawTool_Templater from './DrawTool_Templater'
 
 import $ from 'jquery'
-import * as d3 from 'd3'
 import F_ from '../../Basics/Formulae_/Formulae_'
 import L_ from '../../Basics/Layers_/Layers_'
 import Map_ from '../../Basics/Map_/Map_'
@@ -17,7 +16,7 @@ import Viewer_ from '../../Basics/Viewer_/Viewer_'
 import ToolController_ from '../../Basics/ToolController_/ToolController_'
 import CursorInfo from '../../Ancillary/CursorInfo'
 import Description from '../../Ancillary/Description'
-import TimeControl from '../../Ancillary/TimeControl'
+import TimeControl from '../../Basics/TimeControl_/TimeControl'
 import { Kinds } from '../../../pre/tools'
 import turf from 'turf'
 
@@ -229,6 +228,7 @@ var markup = [
                         "<div id='drawToolShapes_filtering_title'>Advanced Filter</div>",
                     "</div>",
                     "<div id='drawToolShapes_filtering_adds'>",
+                        "<div id='drawToolShapes_filtering_add_group' class='mmgisButton5' title='Add New Grouping'><div>Group</div><i class='mdi mdi-plus mdi-18px'></i></div>",
                         "<div id='drawToolShapes_filtering_add_value' class='mmgisButton5' title='Add New Key-Value Filter'><div>Add</div><i class='mdi mdi-plus mdi-18px'></i></div>",
                     "</div>",
                 "</div>",
@@ -239,6 +239,18 @@ var markup = [
                     "<div id='drawToolShapes_filtering_clear' class='mmgisButton5'><div>Clear Filter</div></div>",
                     "<div id='drawToolShapes_filtering_submit' class='mmgisButton5'><div id='drawToolShapes_filtering_submit_loading'><div></div></div><div id='drawToolShapes_filtering_submit_text'>Submit</div><i class='mdi mdi-arrow-right mdi-18px'></i></div>",
                 "</div>",
+            "</div>",
+          "</div>",
+          "<div id='drawToolShapesSortDiv'>",
+            "<div id='drawToolShapesSortLabel'><i class='mdi mdi-sort mdi-18px'></i></div>",
+            "<div id='drawToolShapesSortProperty'></div>",
+            "<div id='drawToolShapesSortButtons'>",
+              "<div id='drawToolShapesSortAsc' class='drawToolShapesSortButton active' title='Sort Ascending'>",
+                "<i class='mdi mdi-sort-ascending mdi-18px'></i>",
+              "</div>",
+              "<div id='drawToolShapesSortDesc' class='drawToolShapesSortButton' title='Sort Descending'>",
+                "<i class='mdi mdi-sort-descending mdi-18px'></i>",
+              "</div>",
             "</div>",
           "</div>",
           "<div id='drawToolDrawShapesList' class='mmgisScrollbar2'>",
@@ -669,6 +681,9 @@ var DrawTool = {
                         // If it's a non point layer
                         f = f._layers[Object.keys(f._layers)[0]]
                     }
+
+                    // Skip if feature still doesn't exist after drill-down
+                    if (!f || !f.feature) continue
 
                     var properties = f.feature.properties
 
@@ -1325,12 +1340,9 @@ var DrawTool = {
     },
     _isFeatureTemporallyVisible(feature, startField, endField) {
         if (DrawTool.timeToggledOn !== true) return true
-        const startTime = F_.removeTimeZoneOffset(
-            new Date(L_.TimeControl_.getStartTime()).getTime()
-        )
-        const endTime = F_.removeTimeZoneOffset(
-            new Date(L_.TimeControl_.getEndTime()).getTime()
-        )
+        const startTime = new Date(L_.TimeControl_.getStartTime()).getTime()
+
+        const endTime = new Date(L_.TimeControl_.getEndTime()).getTime()
 
         let startTimeValue = false
         if (startField)
@@ -1343,7 +1355,8 @@ var DrawTool = {
         if (endTimeValue === false) return false
         else if (
             typeof endTimeValue === 'string' &&
-            endTimeValue.indexOf('T') != -1
+            endTimeValue.indexOf('T') != -1 &&
+            !endTimeValue.endsWith('Z')
         )
             endTimeValue += 'Z'
 
@@ -1358,7 +1371,8 @@ var DrawTool = {
         } else {
             if (
                 typeof startTimeValue === 'string' &&
-                startTimeValue.indexOf('T') != -1
+                startTimeValue.indexOf('T') != -1 &&
+                !startTimeValue.endsWith('Z')
             )
                 startTimeValue += 'Z'
             // Then we have a range
@@ -1489,15 +1503,15 @@ function interfaceWithMMGIS() {
     }
 
     //MMGIS should always have a div with id 'tools'
-    var tools = d3.select('#toolPanel')
-    tools.style('background', 'var(--color-k)')
+    const toolsContainer = $('#toolPanel')
+    toolsContainer.css('background', 'var(--color-k)')
     //Clear it
-    tools.selectAll('*').remove()
+    toolsContainer.empty()
     //Add a semantic container
-    tools = tools.append('div').style('height', '100%')
+    const tools = $('<div>').css('height', '100%').html(markup)
 
     //Add the markup to tools or do it manually
-    tools.html(markup)
+    toolsContainer.append(tools)
 
     // Set default Public filter state
     if (window._toolStates?.draw?.filter?.public != null) {

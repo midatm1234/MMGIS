@@ -1,5 +1,4 @@
 import $ from 'jquery'
-import * as d3 from 'd3'
 import F_ from '../../Basics/Formulae_/Formulae_'
 import L_ from '../../Basics/Layers_/Layers_'
 import LayerGeologic from '../../Basics/Layers_/LayerGeologic/LayerGeologic'
@@ -29,6 +28,10 @@ var Files = {
         DrawTool.removePopupsFromLayer = Files.removePopupsFromLayer
         DrawTool.refreshNoteEvents = Files.refreshNoteEvents
         DrawTool.refreshMasterCheckbox = Files.refreshMasterCheckbox
+        DrawTool.hideAssociatedPoints = Files.hideAssociatedPoints
+        DrawTool.showAssociatedPoints = Files.showAssociatedPoints
+        DrawTool.removeAssociatedPoints = Files.removeAssociatedPoints
+        DrawTool.renderAssociatedPoints = Files.renderAssociatedPoints
     },
     currentOpenFolderName: null,
     prevFilterString: '',
@@ -392,13 +395,13 @@ var Files = {
                 "</div>",
                 ].join('\n');
             if (file.is_master && !efoldersOnly) {
-                d3.select('#drawToolDrawFilesListMaster')
-                    .append('li')
+                const masterLi = $('<li>')
                     .attr('class', `drawToolDrawFilesListElem${checkState}`)
                     .attr('file_id', file.id)
                     .attr('file_name', file.file_name)
                     .attr('file_owner', file.file_owner)
                     .html(markup)
+                $('#drawToolDrawFilesListMaster').append(masterLi)
 
                 var lastMasterName = $(
                     '#drawToolDrawFilesListMaster li:last-child .drawToolFileName'
@@ -417,40 +420,37 @@ var Files = {
                     file._tagFolders[groupingType].forEach((g) => {
                         const gEnc = encodeURIComponent(g)
 
-                        const group = d3.select(
+                        const group = $(
                             `#drawToolDrawFilesList > .drawToolDrawFilesGroupElem[group_name="${gEnc}"]`
                         )
 
                         let iconClass =
                             Files.getGroupingIcons(groupingType).closed
-                        if (group.size() === 0) {
+                        if (group.length === 0) {
                             // prettier-ignore
-                            d3.select('#drawToolDrawFilesList')
-                            .append('div')
-                            .attr('class', `drawToolDrawFilesGroupElem`)
-                            .attr('group_name', gEnc)
-                            .html(
-                                [
-                                    `<div class='drawToolDrawFilesGroupElemHead' state='off' group_name='${gEnc}' groupingtype='${groupingType}'>`,
-                                        `<div class='${g === 'unassigned' || g === 'untagged' ? 'drawToolDrawFilesGroupElemUn' : ''}'>`,
-                                            `<div class='drawToolDrawFilesGroupElemChevron'><i class='mdi ${iconClass} mdi-18px'></i></div>`,
-                                            `<div>${groupingType === 'alphabetical' ? g.substring(1) : g}</div>`,
+                            const groupElem = $('<div>')
+                                .attr('class', `drawToolDrawFilesGroupElem`)
+                                .attr('group_name', gEnc)
+                                .html(
+                                    [
+                                        `<div class='drawToolDrawFilesGroupElemHead' state='off' group_name='${gEnc}' groupingtype='${groupingType}'>`,
+                                            `<div class='${g === 'unassigned' || g === 'untagged' ? 'drawToolDrawFilesGroupElemUn' : ''}'>`,
+                                                `<div class='drawToolDrawFilesGroupElemChevron'><i class='mdi ${iconClass} mdi-18px'></i></div>`,
+                                                `<div>${groupingType === 'alphabetical' ? g.substring(1) : g}</div>`,
+                                            `</div>`,
+                                            `<div class='drawToolDrawFilesGroupElemCount' count='0'></div>`,
                                         `</div>`,
-                                        `<div class='drawToolDrawFilesGroupElemCount' count='0'></div>`,
-                                    `</div>`,
-                                    '<div class="drawToolDrawFilesGroupListElem" style="display: none;"></div>',
-                                ].join('\n')
-                            )
+                                        '<div class="drawToolDrawFilesGroupListElem" style="display: none;"></div>',
+                                    ].join('\n')
+                                )
+                            $('#drawToolDrawFilesList').append(groupElem)
                         }
                         if (
                             $(
                                 `.drawToolDrawFilesGroupElem[group_name="${gEnc}"] .drawToolDrawFilesGroupListElem > .drawToolDrawFilesListElem[file_id="${file.id}"]`
                             ).length === 0
                         ) {
-                            d3.select(
-                                `.drawToolDrawFilesGroupElem[group_name="${gEnc}"] .drawToolDrawFilesGroupListElem`
-                            )
-                                .append('li')
+                            const groupLi = $('<li>')
                                 .attr(
                                     'class',
                                     `drawToolDrawFilesListElem${checkState}`
@@ -459,16 +459,17 @@ var Files = {
                                 .attr('file_name', file.file_name)
                                 .attr('file_owner', file.file_owner)
                                 .html(markup)
+                            $(`.drawToolDrawFilesGroupElem[group_name="${gEnc}"] .drawToolDrawFilesGroupListElem`).append(groupLi)
                         }
                     })
                 } else if (!efoldersOnly) {
-                    d3.select(`#drawToolDrawFilesList`)
-                        .append('li')
+                    const ungroupedLi = $('<li>')
                         .attr('class', `drawToolDrawFilesListElem${checkState}`)
                         .attr('file_id', file.id)
                         .attr('file_name', file.file_name)
                         .attr('file_owner', file.file_owner)
                         .html(markup)
+                    $('#drawToolDrawFilesList').append(ungroupedLi)
                 }
             }
         }
@@ -1609,6 +1610,9 @@ var Files = {
             if (!l) return
             for (var i = 0; i < l.length; i++) {
                 if (l[i] != null && l[i].temporallyHidden != true) {
+                    // Skip associated points - they shouldn't be highlighted on file hover
+                    if (l[i]._isAssociatedPoint === true) continue
+
                     if (typeof l[i].setStyle === 'function')
                         l[i].setStyle({ color: '#7fff00' })
                     else if (l[i].hasOwnProperty('_layers')) {
@@ -1636,6 +1640,9 @@ var Files = {
             for (var i = 0; i < l.length; i++) {
                 var style
                 if (l[i] != null) {
+                    // Skip associated points - they don't have feature.properties.style
+                    if (l[i]._isAssociatedPoint === true) continue
+
                     if (
                         !l[i].hasOwnProperty('feature') &&
                         l[i].hasOwnProperty('_layers')
@@ -1778,6 +1785,134 @@ var Files = {
         if (activeFileId != null) {
             $(`.drawToolFileSelector[file_id=${activeFileId}]`).first().click()
         }
+    },
+    /**
+     * Remove associated point markers for a specific feature
+     * @param {number} featureId - ID of the feature whose points should be removed
+     * @param {string} layerId - Layer ID (e.g., 'DrawTool_123')
+     */
+    removeAssociatedPoints: function (featureId, layerId) {
+        if (!layerId || !L_.layers.layer[layerId]) return
+
+        const layer = L_.layers.layer[layerId]
+        // Filter out and remove associated points for this feature
+        for (let i = layer.length - 1; i >= 0; i--) {
+            const item = layer[i]
+            if (item && item._isAssociatedPoint === true && item._parentFeatureId === featureId) {
+                // Remove from map
+                Map_.rmNotNull(item)
+                // Remove from layer array
+                layer.splice(i, 1)
+            }
+        }
+    },
+    /**
+     * Hide associated point markers for a specific feature (during editing)
+     * @param {number} featureId - ID of the feature whose points should be hidden
+     * @param {string} layerId - Layer ID (e.g., 'DrawTool_123')
+     */
+    hideAssociatedPoints: function (featureId, layerId) {
+        if (!layerId || !L_.layers.layer[layerId]) return
+
+        const layer = L_.layers.layer[layerId]
+        for (let i = 0; i < layer.length; i++) {
+            const item = layer[i]
+            if (item && item._isAssociatedPoint === true && item._parentFeatureId === featureId) {
+                // Hide the marker by removing it from map (but keep in layer array)
+                if (Map_.map.hasLayer(item)) {
+                    Map_.map.removeLayer(item)
+                    item._wasHidden = true
+                }
+            }
+        }
+    },
+    /**
+     * Show associated point markers for a specific feature (after editing)
+     * @param {number} featureId - ID of the feature whose points should be shown
+     * @param {string} layerId - Layer ID (e.g., 'DrawTool_123')
+     */
+    showAssociatedPoints: function (featureId, layerId) {
+        if (!layerId || !L_.layers.layer[layerId]) return
+
+        const layer = L_.layers.layer[layerId]
+        for (let i = 0; i < layer.length; i++) {
+            const item = layer[i]
+            if (item && item._isAssociatedPoint === true && item._parentFeatureId === featureId && item._wasHidden) {
+                // Show the marker by adding it back to map
+                item.addTo(Map_.map)
+                delete item._wasHidden
+            }
+        }
+    },
+    /**
+     * Render permanent point markers for a feature's point template fields
+     * @param {object} feature - GeoJSON feature with properties
+     * @param {number} fileId - ID of the file containing the feature
+     * @param {string} layerId - Layer ID (e.g., 'DrawTool_123')
+     */
+    renderAssociatedPoints: function (feature, fileId, layerId) {
+        // Get the file's template
+        const file = DrawTool.getFileObjectWithId(fileId)
+        if (!file || !file.template || !file.template.template) return
+
+        const template = file.template.template
+
+        // Find all point type fields in the template
+        const pointFields = template.filter((t) => t.type === 'point')
+        if (pointFields.length === 0) return
+
+        // Remove any existing associated points for this feature first
+        if (feature.properties && feature.properties._) {
+            Files.removeAssociatedPoints(feature.properties._.id, layerId)
+        }
+
+        // Ensure point marker pane exists with high z-index
+        if (!Map_.map.getPane('drawToolPoints')) {
+            Map_.map.createPane('drawToolPoints')
+            Map_.map.getPane('drawToolPoints').style.zIndex = 650
+        }
+
+        // Render points for each point field
+        pointFields.forEach((pointField) => {
+            const points = feature.properties[pointField.field]
+            if (!points || !Array.isArray(points) || points.length === 0) return
+
+            points.forEach((point) => {
+                // Create permanent circle marker
+                const marker = L.circleMarker(
+                    [point.coords[1], point.coords[0]],
+                    {
+                        radius: 6,
+                        weight: 2,
+                        color: 'black',  // Stroke is always black
+                        fillColor: point.color,
+                        fillOpacity: 0.8,
+                        pane: 'drawToolPoints',
+                    }
+                )
+
+                // Mark as associated point (not an independent feature)
+                marker._isAssociatedPoint = true
+                marker._parentFeatureId = feature.properties._.id
+
+                // Bind popup with point name and parent feature name
+                const popupContent = `
+                    <div style="font-size: 13px;">
+                        <strong>${F_.sanitize(point.name)}</strong><br>
+                        <em>Parent: ${F_.sanitize(
+                            feature.properties.name || 'Unnamed Feature'
+                        )}</em>
+                    </div>
+                `
+                marker.bindPopup(popupContent)
+
+                // Add to map
+                marker.addTo(Map_.map)
+
+                // Add to the same layer as parent feature for coordinated visibility
+                L_.layers.layer[layerId].push(marker)
+            })
+        })
     },
     refreshFile: function (
         id,
@@ -1969,6 +2104,9 @@ var Files = {
                     }
                     coreFeatures.features.push(layer.feature)
                 }
+
+                // Render associated points for this feature
+                Files.renderAssociatedPoints(features[i], index, layerId)
             }
 
             if (coreFeatures.features.length > 0) {
@@ -2067,6 +2205,9 @@ var Files = {
                 //And from the Globe
                 Globe_.litho.removeLayer('camptool_' + layerId)
             }
+
+            // Clean up any temporary point markers when toggling file off
+            DrawTool_Templater.cleanupAllPointMarkers()
 
             DrawTool.refreshMasterCheckbox()
 

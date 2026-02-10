@@ -20,6 +20,7 @@ const getClientEnvironment = require("./env");
 const ModuleNotFoundPlugin = require("react-dev-utils/ModuleNotFoundPlugin");
 const ForkTsCheckerWebpackPlugin = require("react-dev-utils/ForkTsCheckerWebpackPlugin");
 const { BundleAnalyzerPlugin } = require("webpack-bundle-analyzer");
+const CopyWebpackPlugin = require("copy-webpack-plugin");
 
 const postcssNormalize = require("postcss-normalize");
 
@@ -299,10 +300,20 @@ module.exports = function (webpackEnv) {
           babelRuntimeEntry,
           babelRuntimeEntryHelpers,
           babelRuntimeRegenerator,
+          // Allow Cesium imports (needed for CSS and source files)
+          path.resolve(paths.appNodeModules, "cesium"),
         ]),
       ],
       fallback: {
         fs: false,
+        // Cesium requires these Node.js core modules
+        path: false,
+        url: false,
+        http: false,
+        https: false,
+        zlib: false,
+        stream: false,
+        buffer: false,
       },
     },
     resolveLoader: {},
@@ -596,6 +607,33 @@ module.exports = function (webpackEnv) {
         resourceRegExp: /^\.\/locale$/,
         contextRegExp: /moment$/,
       }),
+      // Copy Cesium static assets
+      new CopyWebpackPlugin({
+        patterns: [
+          {
+            from: path.join(__dirname, "../node_modules/cesium/Build/Cesium/Workers"),
+            to: path.join("static", "cesium", "Workers"),
+          },
+          {
+            from: path.join(__dirname, "../node_modules/cesium/Build/Cesium/ThirdParty"),
+            to: path.join("static", "cesium", "ThirdParty"),
+          },
+          {
+            from: path.join(__dirname, "../node_modules/cesium/Build/Cesium/Assets"),
+            to: path.join("static", "cesium", "Assets"),
+          },
+          {
+            from: path.join(__dirname, "../node_modules/cesium/Build/Cesium/Widgets"),
+            to: path.join("static", "cesium", "Widgets"),
+          },
+        ],
+      }),
+      // Define Cesium base URL for static assets (must match publicPath)
+      new webpack.DefinePlugin({
+        CESIUM_BASE_URL: JSON.stringify(
+          paths.publicUrlOrPath.replace(/\/$/, "") + "/static/cesium/"
+        ),
+      }),
       // TypeScript type checking
       useTypeScript &&
         new ForkTsCheckerWebpackPlugin({
@@ -629,5 +667,14 @@ module.exports = function (webpackEnv) {
     // Turn off performance processing because we utilize
     // our own hints via the FileSizeReporter
     performance: false,
+    // Suppress warnings from node_modules dependencies
+    ignoreWarnings: [
+      // Suppress warning from @ffmpeg/ffmpeg worker.js. This is a known issue with the
+      // library's dynamic imports for worker files, but it works correctly at runtime.
+      {
+        module: /node_modules\/@ffmpeg\/ffmpeg/,
+        message: /Critical dependency: the request of a dependency is an expression/,
+      },
+    ],
   };
 };

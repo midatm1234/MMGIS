@@ -1,5 +1,4 @@
 import $ from 'jquery'
-import * as d3 from 'd3'
 import F_ from '../Formulae_/Formulae_'
 import L_ from '../Layers_/Layers_'
 import { captureVector } from '../Layers_/LayerCapturer'
@@ -18,7 +17,7 @@ import MetadataCapturer from '../Layers_/MetadataCapturer.js'
 import { Kinds } from '../../../pre/tools'
 import DataShaders from '../../Ancillary/DataShaders'
 import calls from '../../../pre/calls'
-import TimeControl from '../../Ancillary/TimeControl'
+import TimeControl from '../TimeControl_/TimeControl'
 
 import gjv from 'geojson-validation'
 import {
@@ -242,7 +241,7 @@ let Map_ = {
         }
 
         //Remove attribution
-        d3.select('.leaflet-control-attribution').remove()
+        $('.leaflet-control-attribution').remove()
 
         //Make our layers
         makeLayers(L_.layers.dataFlat)
@@ -672,8 +671,14 @@ async function makeLayer(
     id,
     forceMake,
     stopLoops,
-    isRefresh = false
+    isRefresh = false,
+    targetMapContext = null
 ) {
+    // Default to main map context for backward compatibility
+    const mapContext = targetMapContext || {
+        map: Map_.map,
+        layerRegistry: L_.layers
+    }
     return new Promise(async (resolve, reject) => {
         const layerName = L_.asLayerUUID(layerObj.name)
         if (forceMake !== true && L_._layersBeingMade[layerName] === true) {
@@ -696,7 +701,8 @@ async function makeLayer(
                         evenIfOff,
                         null,
                         forceGeoJSON,
-                        isRefresh
+                        isRefresh,
+                        mapContext
                     )
                     break
                 case 'velocity':
@@ -704,30 +710,31 @@ async function makeLayer(
                         layerObj,
                         evenIfOff,
                         null,
-                        forceGeoJSON
+                        forceGeoJSON,
+                        mapContext
                     )
                     break
                 case 'tile':
-                    makeTileLayer(layerObj)
+                    makeTileLayer(layerObj, mapContext)
                     break
                 case 'vectortile':
-                    makeVectorTileLayer(layerObj)
+                    makeVectorTileLayer(layerObj, mapContext)
                     break
                 case 'query':
-                    await makeVectorLayer(layerObj, false, true, forceGeoJSON)
+                    await makeVectorLayer(layerObj, false, true, forceGeoJSON, false, mapContext)
                     break
                 case 'data':
-                    makeDataLayer(layerObj)
+                    makeDataLayer(layerObj, mapContext)
                     break
                 case 'image':
-                    makeImageLayer(layerObj)
+                    makeImageLayer(layerObj, mapContext)
                     break
                 case 'model':
                     //Globe only
-                    makeModelLayer(layerObj)
+                    makeModelLayer(layerObj, mapContext)
                     break
                 case 'video':
-                    makeVideoLayer(layerObj)
+                    makeVideoLayer(layerObj, mapContext)
                     break
                 default:
                     console.warn('Unknown layer type: ' + layerObj.type)
@@ -862,6 +869,13 @@ function featureDefaultClick(feature, layer, e) {
         }
 
         QueryURL.writeSearchURL([searchStr], layer.options.layerName)
+
+        let _event = new CustomEvent('newActiveFeature', {
+            detail: {
+                activeFeature: L_.activeFeature,
+            },
+        })
+        document.dispatchEvent(_event)
     })
 }
 
@@ -871,8 +885,15 @@ async function makeVectorLayer(
     evenIfOff,
     useEmptyGeoJSON,
     forceGeoJSON,
-    isRefresh = false
+    isRefresh = false,
+    mapContext = null
 ) {
+    // Default to main map context for backward compatibility
+    const ctx = mapContext || {
+        map: Map_.map,
+        layerRegistry: L_.layers
+    }
+
     return new Promise((resolve, reject) => {
         if (forceGeoJSON) add(forceGeoJSON)
         else
@@ -923,10 +944,33 @@ async function makeVectorLayer(
                         `ERROR: ${layerObj.display_name} has invalid GeoJSON!`
                     )
                 }
+
+                // For refresh operations, preserve the existing layer on failure
+                // to prevent temporary network issues from marking the layer as "layernotfound"
+                if (isRefresh && data === null) {
+                    const existingLayer = ctx.layerRegistry.layer[layerObj.name]
+                    if (existingLayer != null && existingLayer !== false) {
+                        console.warn(
+                            `[${new Date().toISOString()}] Refresh failed for ${layerObj.display_name}, ` +
+                            `keeping existing layer. Next refresh in ${layerObj.time?.refreshIntervalAmount || 60}s`
+                        )
+                        // Mark layer as having a failed refresh
+                        ctx.layerRegistry.refreshFailed[layerObj.name] = true
+                        // Dispatch event so LayersTool can update the UI
+                        const event = new CustomEvent('layerRefreshStatusChanged', {
+                            detail: { layerName: layerObj.name, failed: true }
+                        })
+                        document.dispatchEvent(event)
+                        resolve()
+                        return
+                    }
+                }
+
+                // Only set to null for initial loads or if no existing layer
                 L_._layersLoaded[
                     L_._layersOrdered.indexOf(layerObj.name)
                 ] = true
-                L_.layers.layer[layerObj.name] = data == null ? null : false
+                ctx.layerRegistry.layer[layerObj.name] = data == null ? null : false
                 allLayersLoaded()
                 resolve()
                 return
@@ -935,39 +979,51 @@ async function makeVectorLayer(
             layerObj.style = layerObj.style || {}
             layerObj.style.layerName = layerObj.name
 
-            layerObj.style.opacity = L_.layers.opacity[layerObj.name]
-            //layerObj.style.fillOpacity = L_.layers.opacity[layerObj.name]
+            layerObj.style.opacity = ctx.layerRegistry.opacity[layerObj.name] || 1
+            //layerObj.style.fillOpacity = ctx.layerRegistry.opacity[layerObj.name]
 
             const vl = constructVectorLayer(
                 data,
                 layerObj,
                 onEachFeatureDefault,
-                Map_
+                Map_  // Keep passing Map_ - constructVectorLayer expects this
             )
 
             // For refresh operations, toggle off old layer and handle seamless swap
             let wasOnForRefresh = false
             if (
                 isRefresh &&
-                L_.layers.on[layerObj.name] &&
-                L_.layers.layer[layerObj.name] &&
-                L_.Map_.map.hasLayer(L_.layers.layer[layerObj.name])
+                ctx.layerRegistry.on[layerObj.name] &&
+                ctx.layerRegistry.layer[layerObj.name] &&
+                ctx.map.hasLayer(ctx.layerRegistry.layer[layerObj.name])
             ) {
                 wasOnForRefresh = true
-                L_.toggleLayer(L_.layers.data[layerObj.name], true, true)
+                L_.toggleLayer(ctx.layerRegistry.data[layerObj.name], true, true)
             }
 
-            L_.layers.attachments[layerObj.name] = vl.sublayers
-            L_.layers.layer[layerObj.name] = vl.layer
+            ctx.layerRegistry.attachments[layerObj.name] = vl.sublayers
+            ctx.layerRegistry.layer[layerObj.name] = vl.layer
+
+            // Add to appropriate map
+            if (vl.layer) {
+                vl.layer.addTo(ctx.map)
+            }
+
+            // Clear refresh failed status on successful load/refresh
+            if (ctx.layerRegistry.refreshFailed && ctx.layerRegistry.refreshFailed[layerObj.name]) {
+                ctx.layerRegistry.refreshFailed[layerObj.name] = false
+                // Dispatch event so LayersTool can update the UI
+                const event = new CustomEvent('layerRefreshStatusChanged', {
+                    detail: { layerName: layerObj.name, failed: false }
+                })
+                document.dispatchEvent(event)
+            }
 
             // For refresh operations, turn the new layer back on if the old one was on
             if (isRefresh && wasOnForRefresh) {
-                L_.toggleLayer(L_.layers.data[layerObj.name], false, true)
+                L_.toggleLayer(ctx.layerRegistry.data[layerObj.name], false, true)
             }
 
-            d3.selectAll('.' + F_.getSafeName(layerObj.name)).data(
-                data.features
-            )
             L_._layersLoaded[L_._layersOrdered.indexOf(layerObj.name)] = true
 
             allLayersLoaded()
@@ -981,8 +1037,14 @@ async function makeVelocityLayer(
     layerObj,
     evenIfOff,
     useEmptyGeoJSON,
-    forceGeoJSON
+    forceGeoJSON,
+    mapContext = null
 ) {
+    // Default to main map context for backward compatibility
+    const ctx = mapContext || {
+        map: Map_.map,
+        layerRegistry: L_.layers
+    }
     return new Promise((resolve, reject) => {
         if (forceGeoJSON) add(forceGeoJSON)
         else
@@ -1158,7 +1220,13 @@ async function makeVelocityLayer(
     })
 }
 
-async function makeTileLayer(layerObj) {
+async function makeTileLayer(layerObj, mapContext = null) {
+    // Default to main map context for backward compatibility
+    const ctx = mapContext || {
+        map: Map_.map,
+        layerRegistry: L_.layers
+    }
+
     // Helper function to add default 'asset_' prefix to bands in expressions if not already prefixed
     const processExpression = (expression) => {
         if (!expression || expression.trim() === '') return expression
@@ -1267,7 +1335,7 @@ async function makeTileLayer(layerObj) {
         tileFormat = tileFormat ? 'tms' : 'wmts'
     } else tileFormat = layerObj.tileformat
 
-    L_.layers.layer[layerObj.name] = L.tileLayer.colorFilter(layerUrl, {
+    ctx.layerRegistry.layer[layerObj.name] = L.tileLayer.colorFilter(layerUrl, {
         minZoom: parseInt(layerObj.minZoom),
         maxZoom: parseInt(layerObj.maxZoom),
         maxNativeZoom: parseInt(layerObj.maxNativeZoom),
@@ -1302,15 +1370,18 @@ async function makeTileLayer(layerObj) {
         variables: layerObj.variables || {},
     })
 
-    L_.setLayerOpacity(layerObj.name, L_.layers.opacity[layerObj.name])
+    // Add to appropriate map
+    ctx.layerRegistry.layer[layerObj.name].addTo(ctx.map)
+
+    L_.setLayerOpacity(layerObj.name, ctx.layerRegistry.opacity[layerObj.name] || 1)
 
     L_._layersLoaded[L_._layersOrdered.indexOf(layerObj.name)] = true
-    L_.layers.layer[layerObj.name].off('loading')
-    L_.layers.layer[layerObj.name].on('loading', () => {
+    ctx.layerRegistry.layer[layerObj.name].off('loading')
+    ctx.layerRegistry.layer[layerObj.name].on('loading', () => {
         L_.setGlobalLoading(layerObj.name)
     })
-    L_.layers.layer[layerObj.name].off('load')
-    L_.layers.layer[layerObj.name].on('load', () => {
+    ctx.layerRegistry.layer[layerObj.name].off('load')
+    ctx.layerRegistry.layer[layerObj.name].on('load', () => {
         // Set default css filters for tile layer
         if (
             layerObj.style?.brightness != null &&
@@ -1354,7 +1425,12 @@ async function makeTileLayer(layerObj) {
     allLayersLoaded()
 }
 
-function makeVectorTileLayer(layerObj) {
+function makeVectorTileLayer(layerObj, mapContext = null) {
+    // Default to main map context for backward compatibility
+    const ctx = mapContext || {
+        map: Map_.map,
+        layerRegistry: L_.layers
+    }
     let layerUrl = L_.getUrl(layerObj.type, layerObj.url, layerObj)
 
     let urlSplit = layerObj.url.split(':')
@@ -1532,12 +1608,22 @@ function makeVectorTileLayer(layerObj) {
     allLayersLoaded()
 }
 
-function makeModelLayer(layerObj) {
+function makeModelLayer(layerObj, mapContext = null) {
+    // Default to main map context for backward compatibility
+    const ctx = mapContext || {
+        map: Map_.map,
+        layerRegistry: L_.layers
+    }
     L_._layersLoaded[L_._layersOrdered.indexOf(layerObj.name)] = true
     allLayersLoaded()
 }
 
-function makeDataLayer(layerObj) {
+function makeDataLayer(layerObj, mapContext = null) {
+    // Default to main map context for backward compatibility
+    const ctx = mapContext || {
+        map: Map_.map,
+        layerRegistry: L_.layers
+    }
     let layerUrl = L_.getUrl(layerObj.type, layerObj.demtileurl, layerObj)
 
     let bb = null
@@ -1578,7 +1664,12 @@ function makeDataLayer(layerObj) {
     allLayersLoaded()
 }
 
-function makeImageLayer(layerObj) {
+function makeImageLayer(layerObj, mapContext = null) {
+    // Default to main map context for backward compatibility
+    const ctx = mapContext || {
+        map: Map_.map,
+        layerRegistry: L_.layers
+    }
     let layerUrl = L_.getUrl(layerObj.type, layerObj.url, layerObj)
     if (!F_.isUrlAbsolute(layerUrl)) {
         layerUrl = `${window.location.origin}${(
@@ -1765,7 +1856,12 @@ function makeImageLayer(layerObj) {
         })
 }
 
-function makeVideoLayer(layerObj) {
+function makeVideoLayer(layerObj, mapContext = null) {
+    // Default to main map context for backward compatibility
+    const ctx = mapContext || {
+        map: Map_.map,
+        layerRegistry: L_.layers
+    }
     let layerUrl = L_.getUrl(layerObj.type, layerObj.url, layerObj)
     if (!F_.isUrlAbsolute(layerUrl)) {
         layerUrl = `${window.location.origin}${(
@@ -1884,7 +1980,8 @@ function allLayersLoaded() {
             // Turn on legend if displayOnStart is true
             if ('LegendTool' in ToolController_.toolModules) {
                 if (
-                    ToolController_.toolModules['LegendTool'].displayOnStart == true
+                    ToolController_.toolModules['LegendTool'].displayOnStart ==
+                    true
                 ) {
                     ToolController_.toolModules['LegendTool'].make(
                         'toolContentSeparated_Legend'
@@ -1904,31 +2001,51 @@ function allLayersLoaded() {
 }
 
 function buildToolBar() {
-    d3.select('#mapToolBar').html('')
+    $('#mapToolBar').html('')
 
-    Map_.toolBar = d3
-        .select('#mapToolBar')
-        .append('div')
+    Map_.toolBar = $('<div>')
         .attr('class', 'row childpointerevents')
-        .style('height', '100%')
-    Map_.toolBar
-        .append('div')
-        .attr('id', 'scaleBarBounds')
-        .style('width', '270px')
-        .style('height', '36px')
-        .append('svg')
-        .attr('id', 'scaleBar')
-        .attr('width', '270px')
-        .attr('height', '36px')
+        .css('height', '100%')
+    $('#mapToolBar').append(Map_.toolBar)
+
+    const scaleBarBounds = $('<div>').attr('id', 'scaleBarBounds').css({
+        width: '270px',
+        height: '36px',
+    })
+    Map_.toolBar.append(scaleBarBounds)
+
+    // Create SVG with proper namespace for D3 compatibility
+    const scaleBarSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+    scaleBarSvg.setAttribute('id', 'scaleBar')
+    scaleBarSvg.setAttribute('width', '270px')
+    scaleBarSvg.setAttribute('height', '36px')
+    scaleBarBounds.append(scaleBarSvg)
 }
 
 function clearOnMapClick(event) {
     if (Map_._justSetActiveLayer) {
         Map_._justSetActiveLayer = false
+
+        L_.setActiveFeature(null)
+
+        let _event = new CustomEvent('newActiveFeature', {
+            detail: {
+                activeFeature: null,
+            },
+        })
+        document.dispatchEvent(_event)
         return
     }
     // Skip if there is no actively selected feature
     if (!Map_.activeLayer) {
+        L_.setActiveFeature(null)
+
+        let _event = new CustomEvent('newActiveFeature', {
+            detail: {
+                activeFeature: null,
+            },
+        })
+        document.dispatchEvent(_event)
         return
     }
 

@@ -1,16 +1,20 @@
 import $ from 'jquery'
-import * as d3 from 'd3'
 import F_ from '../../Basics/Formulae_/Formulae_'
 import L_ from '../../Basics/Layers_/Layers_'
 import Map_ from '../../Basics/Map_/Map_'
 import CursorInfo from '../../Ancillary/CursorInfo'
 import LocalFilterer from '../../Ancillary/LocalFilterer'
 import Dropy from '../../../external/Dropy/dropy'
+import Sortable from 'sortablejs'
 
 import './DrawTool_Shapes.css'
 
 var DrawTool = null
 var Shapes = {
+    sort: {
+        property: null, // null means "None"
+        direction: 'asc', // 'asc' or 'desc'
+    },
     init: function (tool) {
         DrawTool = tool
         DrawTool.populateShapes = Shapes.populateShapes
@@ -46,24 +50,21 @@ var Shapes = {
             if (s[0] == 'DrawTool' && DrawTool.filesOn.indexOf(onId) != -1) {
                 var file = DrawTool.getFileObjectWithId(s[1])
                 fileIds.push(onId)
-                if (L_.layers.layer[l].length > 0)
-                    d3.select('#drawToolShapesFeaturesList')
-                        .append('li')
+                if (L_.layers.layer[l].length > 0) {
+                    const headerLi = $('<li>')
                         .attr('class', 'drawToolShapesFeaturesListFileHeader')
-                        .style(
-                            'background',
-                            DrawTool.categoryStyles[file.intent].color
-                        )
-                        .style(
-                            'color',
-                            file.intent == 'campaign' ||
+                        .css({
+                            'background': DrawTool.categoryStyles[file.intent].color,
+                            'color': file.intent == 'campaign' ||
                                 file.intent == 'campsite' ||
                                 file.intent == 'trail' ||
                                 file.intent == 'all'
                                 ? 'black'
                                 : 'white'
-                        )
+                        })
                         .html(file.file_name)
+                    $('#drawToolShapesFeaturesList').append(headerLi)
+                }
                 for (var i = 0; i < L_.layers.layer[l].length; i++) {
                     addShapeToList(L_.layers.layer[l][i], file, l, i, s[1])
                 }
@@ -71,6 +72,7 @@ var Shapes = {
         }
         Shapes.filters = Shapes.filters || {
             values: [],
+            valuesOrder: [], // Track order for drag & drop
             geojson: null,
         }
         try {
@@ -116,6 +118,10 @@ var Shapes = {
         $('#drawToolShapesFilter').off('input')
         $('#drawToolShapesFilter').on('input', shapeFilter)
         shapeFilter()
+
+        // Initialize Sort Controls
+        Shapes.initializeSort()
+
         function shapeFilter() {
             //filter over name, intent and id for now
             var on = 0
@@ -185,10 +191,16 @@ var Shapes = {
 
             $('#drawToolShapesFilterCount').text(on + '/' + (on + off))
             $('#drawToolShapesFilterCount').css('padding-right', '7px')
+
+            // Re-apply sort after filtering
+            Shapes.applySort()
         }
 
         function addShapeToList(shape, file, layer, index, layerId) {
             if (shape == null) return
+
+            // Skip associated points - they are not independent features
+            if (shape._isAssociatedPoint === true) return
 
             var f = shape
 
@@ -261,8 +273,7 @@ var Shapes = {
             let activeClass = ''
             if (stillActive.indexOf(shapeLiId) != -1) activeClass = ' active'
 
-            d3.select('#drawToolShapesFeaturesList')
-                .append('li')
+            const shapeLi = $('<li>')
                 .attr('id', 'drawToolShapeLiItem_' + layer + '_' + index)
                 .attr('class', 'drawToolShapeLi' + activeClass)
                 .attr('layer', layer)
@@ -274,6 +285,7 @@ var Shapes = {
                 .attr('intent', properties._.intent)
                 .attr('shape_id', properties._.id)
                 .html(markup)
+            $('#drawToolShapesFeaturesList').append(shapeLi)
 
             $('#drawToolShapeLiItem_' + layer + '_' + index)
                 .find('.drawToolShapeLiItemB')
@@ -282,6 +294,9 @@ var Shapes = {
 
             for (var elayer in f) {
                 var e = f[elayer]
+
+                // Skip associated points - they are not independently interactive
+                if (e._isAssociatedPoint === true) continue
 
                 var pUpfeature = e.feature
                 if (e.feature == null && shape.feature != null)
@@ -695,7 +710,7 @@ var Shapes = {
         $('#drawToolShapesCopyDropdown').html(
             "<select id='drawToolShapesCopySelect' class='ui dropdown dropdown_1'></select>"
         )
-        d3.select('#drawToolShapesCopySelect').html(
+        $('#drawToolShapesCopySelect').html(
             "<option value='' disabled selected hidden>" +
                 defaultOpt +
                 '</option>'
@@ -747,10 +762,10 @@ var Shapes = {
                             DrawTool.files[i].intent == 'signpost') ||
                         intent == DrawTool.files[i].intent)
                 ) {
-                    d3.select('#drawToolShapesCopySelect')
-                        .append('option')
+                    const leadOption = $('<option>')
                         .attr('value', DrawTool.files[i].id)
                         .text(DrawTool.files[i].file_name + ' [Lead]')
+                    $('#drawToolShapesCopySelect').append(leadOption)
                 } else if (
                     (mmgisglobal.user == DrawTool.files[i].file_owner ||
                         isListEdit ||
@@ -759,10 +774,10 @@ var Shapes = {
                     intent == DrawTool.files[i].intent &&
                     DrawTool.files[i].hidden == '0'
                 ) {
-                    d3.select('#drawToolShapesCopySelect')
-                        .append('option')
+                    const fileOption = $('<option>')
                         .attr('value', DrawTool.files[i].id)
                         .text(DrawTool.files[i].file_name)
+                    $('#drawToolShapesCopySelect').append(fileOption)
                 }
             }
         }
@@ -808,7 +823,8 @@ var Shapes = {
 
         // prettier-ignore
         const valueMarkup = [
-            `<div class='drawToolShapes_filtering_value' id='drawToolShapes_filtering_value_${id}'>`,
+            `<li class='drawToolShapes_filtering_value' id='drawToolShapes_filtering_value_${id}'>`,
+                `<div class='drawFilterDragHandle'><i class="mdi mdi-drag-vertical mdi-12px"></i></div>`,
                 "<div class='drawToolShapes_filtering_value_key'>",
                     `<input id='drawToolShapes_filtering_value_key_input_${id}' class='drawToolShapes_filtering_value_key_input' spellcheck='false' type='text'${key} placeholder='Property...'></input>`,
                 "</div>",
@@ -823,7 +839,7 @@ var Shapes = {
                     `</div>`,
                 "</div>",
                 `<div id='drawToolShapes_filtering_value_clear_${id}' class='mmgisButton5 drawToolShapes_filtering_filters_clear'><i class='mdi mdi-close mdi-18px'></i></div>`,
-            "</div>",
+            "</li>",
         ].join('\n')
 
         $('#drawToolShapes_filtering_filters_list').append(valueMarkup)
@@ -839,6 +855,52 @@ var Shapes = {
         }
 
         Shapes.attachValueEvents(id, { op: op })
+
+        Shapes.makeFilterListSortable()
+
+        // Show footer iff value rows exist
+        $('#drawToolShapes_filtering_footer').css(
+            'display',
+            Shapes.filters.values.length === 0 ? 'none' : 'flex'
+        )
+    },
+    addGroup: function (group) {
+        let id, op
+        if (group) {
+            id = group.id
+            op = group.op
+        } else {
+            id = Shapes.filters.values.length
+            op = 'OR' // Default to OR since AND is already the higher level op
+        }
+
+        // prettier-ignore
+        const groupMarkup = [
+            `<li class='drawToolShapes_filtering_group' id='drawToolShapes_filtering_group_${id}'>`,
+                `<div>`,
+                    `<div class='drawFilterDragHandle'><i class="mdi mdi-drag-vertical mdi-12px"></i></div>`,
+                    "<div class='drawToolShapes_filtering_group_key'>Group</div>",
+                    "<div class='drawToolShapes_filtering_group_operator'>",
+                        `<div id='drawToolShapes_filtering_group_operator_${id}' class='drawToolShapes_filtering_group_operator_select op_${(op || 'AND').toLowerCase()}'></div>`,
+                    '</div>',
+                `</div>`,
+                `<div id='drawToolShapes_filtering_group_clear_${id}' class='mmgisButton5 drawToolShapes_filtering_filters_clear'><i class='mdi mdi-close mdi-18px'></i></div>`,
+            '</li>',
+        ].join('\n')
+
+        $('#drawToolShapes_filtering_filters_list').append(groupMarkup)
+
+        if (group == null) {
+            Shapes.filters.values.push({
+                isGroup: true,
+                id: id,
+                op: op,
+            })
+        }
+
+        Shapes.attachGroupEvents(id, { op: op })
+
+        Shapes.makeFilterListSortable()
 
         // Show footer iff value rows exist
         $('#drawToolShapes_filtering_footer').css(
@@ -857,6 +919,12 @@ var Shapes = {
         }
     },
     attachEvents: function (fileIds) {
+        // Add Group
+        $('#drawToolShapes_filtering_add_group').off('click')
+        $('#drawToolShapes_filtering_add_group').on('click', function () {
+            Shapes.addGroup()
+        })
+
         // Add Value
         $('#drawToolShapes_filtering_add_value').off('click')
         $('#drawToolShapes_filtering_add_value').on('click', function () {
@@ -866,6 +934,18 @@ var Shapes = {
         // Submit
         $(`#drawToolShapes_filtering_submit`).off('click')
         $(`#drawToolShapes_filtering_submit`).on('click', async () => {
+            // Update valuesOrder based on current DOM order
+            const valuesOrder = []
+            $('#drawToolShapes_filtering_filters_list > li').each(function () {
+                const idMatch = $(this)
+                    .attr('id')
+                    .match(/_(\d+)$/)
+                if (idMatch) {
+                    valuesOrder.push(parseInt(idMatch[1]))
+                }
+            })
+            Shapes.filters.valuesOrder = valuesOrder
+
             Shapes.setSubmitButtonState(true)
             $(`#drawToolShapes_filtering_submit_loading`).addClass('active')
             $(`.drawToolContextMenuHeaderClose`).click()
@@ -874,6 +954,9 @@ var Shapes = {
                 // Refilter to show all
                 const filter = {
                     values: JSON.parse(JSON.stringify(Shapes.filters.values)),
+                    valuesOrder: JSON.parse(
+                        JSON.stringify(Shapes.filters.valuesOrder)
+                    ),
                     geojson: {
                         type: 'FeatureCollection',
                         features: DrawTool.fileGeoJSONFeatures[fileId],
@@ -899,6 +982,9 @@ var Shapes = {
             })
             $(`#drawToolShapes_filtering_submit_loading`).removeClass('active')
             Shapes.setSubmitButtonState(false)
+
+            // Re-apply sort after advanced filtering
+            Shapes.applySort()
         })
 
         // Clear
@@ -907,17 +993,23 @@ var Shapes = {
             $(`#drawToolShapes_filtering_submit_loading`).addClass('active')
             Shapes.setSubmitButtonState(true)
 
-            // Clear value filter elements
+            // Clear value and group filter elements
             Shapes.filters.values = Shapes.filters.values.filter((v) => {
-                if (v) $(`#drawToolShapes_filtering_value_${v.id}`).remove()
+                if (v) {
+                    if (v.isGroup === true)
+                        $(`#drawToolShapes_filtering_group_${v.id}`).remove()
+                    else $(`#drawToolShapes_filtering_value_${v.id}`).remove()
+                }
                 return false
             })
+            Shapes.filters.valuesOrder = []
 
             $(`.drawToolContextMenuHeaderClose`).click()
             fileIds.forEach((fileId) => {
                 // Refilter to show all
                 const filter = {
                     values: JSON.parse(JSON.stringify(Shapes.filters.values)),
+                    valuesOrder: [],
                     geojson: {
                         type: 'FeatureCollection',
                         features: DrawTool.fileGeoJSONFeatures[fileId],
@@ -947,6 +1039,9 @@ var Shapes = {
             Shapes.setSubmitButtonState(false)
 
             $(`#drawToolShapes_filtering_submit_loading`).removeClass('active')
+
+            // Re-apply sort after clearing filter
+            Shapes.applySort()
         })
     },
     attachValueEvents: function (id, options) {
@@ -1047,19 +1142,36 @@ var Shapes = {
         // Operator Dropdown
         elmId = `#drawToolShapes_filtering_value_operator_${id}`
 
-        const ops = ['=', ',', '<', '>']
+        const ops = [
+            '=',
+            '!=',
+            ',',
+            '<',
+            '>',
+            '<=',
+            '>=',
+            'contains',
+            'beginswith',
+            'endswith',
+        ]
         const opId = Math.max(ops.indexOf(options.op), 0)
         $(elmId).html(
             Dropy.construct(
                 [
                     `<i class='mdi mdi-equal mdi-18px' title='Equals'></i>`,
+                    `<div title='Not Equals' style='font-family: monospace;'>!=</div>`,
                     `<div title='Comma-separated list' style='font-family: monospace;'>in</div>`,
                     `<i class='mdi mdi-less-than mdi-18px' title='Less than'></i>`,
                     `<i class='mdi mdi-greater-than mdi-18px' title='Greater than'></i>`,
+                    `<i class='mdi mdi-less-than-or-equal mdi-18px' title='Less than or Equal'></i>`,
+                    `<i class='mdi mdi-greater-than-or-equal mdi-18px' title='Greater than or Equal'></i>`,
+                    `<i class='mdi mdi-contain mdi-18px' title='Contains'></i>`,
+                    `<i class='mdi mdi-contain-start mdi-18px' title='Begins With'></i>`,
+                    `<i class='mdi mdi-contain-end mdi-18px' title='Ends With'></i>`,
                 ],
                 'op',
                 opId,
-                { openHorizontal: true, fixedItemWidth: 30, hideChevron: true }
+                { fixedItemWidth: 30, hideChevron: true }
             )
         )
         Dropy.init($(elmId), function (idx) {
@@ -1139,6 +1251,262 @@ var Shapes = {
                 $(stringElmId).css('display', 'none')
                 break
         }
+    },
+    attachGroupEvents: function (id, options) {
+        options = options || {}
+
+        let elmId
+
+        // Clear
+        elmId = `#drawToolShapes_filtering_group_clear_${id}`
+
+        $(elmId).on('click', () => {
+            // Clear group filter element
+            for (let i = 0; i < Shapes.filters.values.length; i++) {
+                if (Shapes.filters.values[i]?.isGroup) {
+                    const vId = Shapes.filters.values[i]?.id
+                    if (vId != null && vId === id) {
+                        $(`#drawToolShapes_filtering_group_${vId}`).remove()
+                        Shapes.filters.values[i] = null
+                    }
+                }
+            }
+            Shapes.setSubmitButtonState(true)
+        })
+
+        // Operator Dropdown
+        elmId = `#drawToolShapes_filtering_group_operator_${id}`
+
+        const ops = ['AND', 'OR', 'NOT_AND', 'NOT_OR']
+        const opId = Math.max(ops.indexOf(options.op), 0)
+        $(elmId).html(
+            Dropy.construct(
+                [
+                    `<div style='font-family: monospace;'>All Must Match (AND)</div>`,
+                    `<div style='font-family: monospace;'>Any May Match (OR)</div>`,
+                    `<div style='font-family: monospace;'>Not All May Match (NOT AND)</div>`,
+                    `<div style='font-family: monospace;'>None Must Match (NOT OR)</div>`,
+                ],
+                'op',
+                opId,
+                { hideChevron: true }
+            )
+        )
+        Dropy.init($(elmId), function (idx) {
+            const newOp = ops[idx]
+            Shapes.filters.values[id].op = newOp
+            switch (newOp) {
+                case 'AND':
+                    $(elmId).removeClass('op_or')
+                    $(elmId).removeClass('op_not_and')
+                    $(elmId).removeClass('op_not_or')
+                    $(elmId).addClass('op_and')
+                    break
+                case 'OR':
+                    $(elmId).removeClass('op_and')
+                    $(elmId).removeClass('op_not_and')
+                    $(elmId).removeClass('op_not_or')
+                    $(elmId).addClass('op_or')
+                    break
+                case 'NOT_AND':
+                    $(elmId).removeClass('op_and')
+                    $(elmId).removeClass('op_or')
+                    $(elmId).removeClass('op_not_or')
+                    $(elmId).addClass('op_not_and')
+                    break
+                case 'NOT_OR':
+                    $(elmId).removeClass('op_and')
+                    $(elmId).removeClass('op_or')
+                    $(elmId).removeClass('op_not_and')
+                    $(elmId).addClass('op_not_or')
+                    break
+                default:
+                    break
+            }
+            Shapes.setSubmitButtonState(true)
+        })
+    },
+    makeFilterListSortable: function () {
+        const listToSort = document.getElementById(
+            'drawToolShapes_filtering_filters_list'
+        )
+        // Destroy existing sortable instance if it exists
+        if (listToSort && listToSort.sortable) {
+            listToSort.sortable.destroy()
+        }
+        if (listToSort) {
+            listToSort.sortable = Sortable.create(listToSort, {
+                animation: 150,
+                easing: 'cubic-bezier(0.39, 0.575, 0.565, 1)',
+                handle: '.drawFilterDragHandle',
+                onStart: () => {},
+                onChange: () => {},
+                onEnd: () => {
+                    // Update valuesOrder based on new DOM order
+                    const valuesOrder = []
+                    $('#drawToolShapes_filtering_filters_list > li').each(
+                        function () {
+                            const idMatch = $(this)
+                                .attr('id')
+                                .match(/_(\d+)$/)
+                            if (idMatch) {
+                                valuesOrder.push(parseInt(idMatch[1]))
+                            }
+                        }
+                    )
+                    Shapes.filters.valuesOrder = valuesOrder
+                    Shapes.setSubmitButtonState(true)
+                },
+            })
+        }
+    },
+    initializeSort: function () {
+        // Build property list from aggregations
+        let properties = ['Unsorted']
+        if (Shapes.filters.aggs) {
+            const sortedProperties = Object.keys(Shapes.filters.aggs).sort()
+            properties = properties.concat(sortedProperties)
+        }
+
+        // Populate property dropdown
+        const currentProperty = Shapes.sort.property || 'Unsorted'
+        const currentIndex = Math.max(properties.indexOf(currentProperty), 0)
+
+        $('#drawToolShapesSortProperty').html(
+            Dropy.construct(properties, 'sort', currentIndex, {
+                openDown: true,
+            })
+        )
+
+        // Initialize Dropy
+        Dropy.init($('#drawToolShapesSortProperty'), function (idx) {
+            const selectedProperty = properties[idx]
+            const wasNull = Shapes.sort.property == null
+            Shapes.sort.property =
+                selectedProperty === 'Unsorted' ? null : selectedProperty
+
+            // If switching back to Unsorted, repopulate to restore grouped order
+            if (Shapes.sort.property == null && !wasNull) {
+                // Remove active state from direction buttons
+                $('.drawToolShapesSortButton').removeClass('active')
+                DrawTool.populateShapes()
+            } else {
+                Shapes.applySort()
+            }
+        })
+
+        // Attach direction button handlers
+        $('#drawToolShapesSortAsc').off('click')
+        $('#drawToolShapesSortAsc').on('click', function () {
+            if (Shapes.sort.property == null) return
+
+            Shapes.sort.direction = 'asc'
+            $('.drawToolShapesSortButton').removeClass('active')
+            $(this).addClass('active')
+            Shapes.applySort()
+        })
+
+        $('#drawToolShapesSortDesc').off('click')
+        $('#drawToolShapesSortDesc').on('click', function () {
+            if (Shapes.sort.property == null) return
+
+            Shapes.sort.direction = 'desc'
+            $('.drawToolShapesSortButton').removeClass('active')
+            $(this).addClass('active')
+            Shapes.applySort()
+        })
+
+        // Update button states
+        if (Shapes.sort.property == null) {
+            $('.drawToolShapesSortButton')
+                .removeClass('active')
+                .addClass('disabled')
+        } else {
+            $('.drawToolShapesSortButton').removeClass('disabled')
+        }
+    },
+    applySort: function () {
+        // If no property selected, show original order with headers
+        if (Shapes.sort.property == null) {
+            $('.drawToolShapesFeaturesListFileHeader').show()
+            $('.drawToolShapesSortButton')
+                .removeClass('active')
+                .addClass('disabled')
+            return
+        }
+
+        // Enable direction buttons
+        $('.drawToolShapesSortButton').removeClass('disabled')
+
+        // Hide file headers when sorting
+        $('.drawToolShapesFeaturesListFileHeader').hide()
+
+        // Get all shape list items
+        const items = $('.drawToolShapeLi').detach().toArray()
+
+        // Helper function to get property value from a list item
+        const getPropertyValue = (item) => {
+            const layer = $(item).attr('layer')
+            const index = $(item).attr('index')
+            const shape = L_.layers.layer[layer][index]
+
+            if (!shape) return null
+
+            let feature
+            if (
+                !shape.hasOwnProperty('feature') &&
+                shape.hasOwnProperty('_layers')
+            )
+                feature = shape._layers[Object.keys(shape._layers)[0]].feature
+            else feature = shape.feature
+
+            if (!feature) return null
+
+            // Get the property value
+            let value
+            if (Shapes.sort.property === 'geometry.type') {
+                value = feature.geometry?.type
+            } else {
+                value = F_.getIn(feature.properties, Shapes.sort.property)
+            }
+
+            return value
+        }
+
+        // Sort items
+        items.sort((a, b) => {
+            const aVal = getPropertyValue(a)
+            const bVal = getPropertyValue(b)
+
+            // Handle null/undefined values (push to end)
+            if (aVal == null && bVal == null) return 0
+            if (aVal == null) return 1
+            if (bVal == null) return -1
+
+            // Determine if numeric
+            const aNum = parseFloat(aVal)
+            const bNum = parseFloat(bVal)
+            const isNumeric = !isNaN(aNum) && !isNaN(bNum)
+
+            let comparison = 0
+            if (isNumeric) {
+                comparison = aNum - bNum
+            } else {
+                // String comparison
+                const aStr = String(aVal).toLowerCase()
+                const bStr = String(bVal).toLowerCase()
+                comparison = aStr.localeCompare(bStr)
+            }
+
+            // Apply direction
+            return Shapes.sort.direction === 'asc' ? comparison : -comparison
+        })
+
+        // Re-append sorted items
+        const list = $('#drawToolShapesFeaturesList')
+        items.forEach((item) => {
+            list.append(item)
+        })
     },
 }
 

@@ -2,7 +2,7 @@ import L_ from '../Basics/Layers_/Layers_'
 import F_ from '../Basics/Formulae_/Formulae_'
 import ToolController_ from '../Basics/ToolController_/ToolController_'
 import QueryURL from '../Ancillary/QueryURL'
-import TimeControl from '../Ancillary/TimeControl'
+import TimeControl from '../Basics/TimeControl_/TimeControl'
 import Login from '../Ancillary/Login/Login'
 import LegendTool from '../Tools/Legend/LegendTool.js'
 
@@ -419,6 +419,9 @@ var mmgisAPI_ = {
             'layerVisibilityChange',
             'websocketChange',
             'toggleSeparatedTool',
+            'newActiveFeature',
+            'layersToolHeaderStateChange',
+            'madeLegendTool',
         ]
         return validEvents.includes(eventName)
     },
@@ -689,7 +692,7 @@ var mmgisAPI = {
     getVisibleLayers: mmgisAPI_.getVisibleLayers,
 
     /** addEventListener - adds map event or MMGIS action listener.
-     * @param {string} - eventName - name of event to add listener to. Available events: onPan, onZoom, onClick, toolChange, layerVisibilityChange, toggleSeparatedTool
+     * @param {string} - eventName - name of event to add listener to. Available events: onPan, onZoom, onClick, toolChange, layerVisibilityChange, toggleSeparatedTool, newActiveFeature, layersToolHeaderStateChange, madeLegendTool
 
      * @param {function} - functionReference - function reference to listener event callback function. null value removes all functions for a given eventName
 
@@ -697,7 +700,7 @@ var mmgisAPI = {
     addEventListener: mmgisAPI_.addEventListener,
 
     /** removeEventListener - removes map event or MMGIS action listener added using the MMGIS API.
-     * @param {string} - eventName - name of event to add listener to. Available events: onPan, onZoom, onClick, toolChange, layerVisibilityChange, toggleSeparatedTool
+     * @param {string} - eventName - name of event to add listener to. Available events: onPan, onZoom, onClick, toolChange, layerVisibilityChange, toggleSeparatedTool, newActiveFeature
      * @param {function} - functionReference - function reference to listener event callback function. null value removes all functions for a given eventName
      */
     removeEventListener: mmgisAPI_.removeEventListener,

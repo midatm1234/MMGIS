@@ -29,7 +29,7 @@ const { sequelize } = require("../API/connection");
 
 const setups = require("../API/setups");
 
-const { updateTools } = require("../API/updateTools");
+const { updateTools, updateComponents } = require("../API/updateTools");
 
 const { websocket } = require("../API/websocket");
 
@@ -358,6 +358,7 @@ function ensureAdmin(
           req.isLongTermToken = true;
           req.tokenUserPermission = tokenData.permission;
           req.tokenUserMissions = tokenData.missions_managing;
+          req.user = tokenData.username;
           next();
         },
         () => {
@@ -389,7 +390,7 @@ function validateLongTermToken(token, successCallback, failureCallback) {
 
   sequelize
     .query(
-      'SELECT lt.*, u.permission, u.missions_managing FROM "long_term_tokens" lt JOIN "users" u ON lt.created_by_user_id = u.id WHERE lt.token=:token',
+      'SELECT lt.*, u.permission, u.missions_managing, u.username FROM "long_term_tokens" lt JOIN "users" u ON lt.created_by_user_id = u.id WHERE lt.token=:token',
       {
         replacements: {
           token: token,
@@ -420,8 +421,19 @@ function validateLongTermToken(token, successCallback, failureCallback) {
 
 function ensureUser() {
   return (req, res, next) => {
+    /* If the request is:
+      - Not trying to use an authorization header (longtermtoken)
+      - And MMGIS is not configured to use AUTH-local
+        OR
+      - There is already a user session with valid permissions set
+        Then continue
+
+      Otherwise, if there is an authorization header (longtermtoken), try to validate it.
+
+      Still if not, redirect to the login page
+    */
     if (
-      process.env.AUTH != "local" ||
+      (req.headers.authorization == null && process.env.AUTH != "local") ||
       (typeof req.session.permission === "string" &&
         (req.session.permission === "111" ||
           req.session.permission === "110" ||
@@ -438,6 +450,7 @@ function ensureUser() {
             req.isLongTermToken = true;
             req.tokenUserPermission = tokenData.permission;
             req.tokenUserMissions = tokenData.missions_managing;
+            req.user = tokenData.username;
             next();
           },
           () => {
@@ -611,30 +624,6 @@ setups.getBackendSetups(function (setups) {
     express.static(path.join(rootDir, "/README.md"))
   );
   app.use(
-    `${ROOT_PATH}/config/login`,
-    express.static(path.join(rootDir, "/config/login"))
-  );
-  app.use(
-    `${ROOT_PATH}/config/css`,
-    ensureUser(),
-    express.static(path.join(rootDir, "/config/css"))
-  );
-  app.use(
-    `${ROOT_PATH}/config/js`,
-    ensureUser(),
-    express.static(path.join(rootDir, "/config/js"))
-  );
-  app.use(
-    `${ROOT_PATH}/config/pre`,
-    ensureUser(),
-    express.static(path.join(rootDir, "/config/pre"))
-  );
-  app.use(
-    `${ROOT_PATH}/config/fonts`,
-    ensureUser(),
-    express.static(path.join(rootDir, "/config/fonts"))
-  );
-  app.use(
     `${ROOT_PATH}/configure/build`,
     ensureUser(),
     express.static(path.join(rootDir, "/configure/build"))
@@ -703,6 +692,9 @@ setups.getBackendSetups(function (setups) {
   if (process.env.NODE_ENV === "development") {
     console.log(chalk.cyan("Updating Tools...\n"));
     updateTools();
+
+    console.log(chalk.cyan("Updating Components...\n"));
+    updateComponents();
   }
 
   //////Setups Init//////

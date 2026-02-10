@@ -1,6 +1,7 @@
 .vscode
 .DS_Store
 .env
+nul
 
 /node_modules/
 /ssl/*
@@ -9,6 +10,8 @@
 /Missions/*
 !/Missions/.gitkeep
 /private/api/spice/kernels/*
+/configure/public/toolConfigs.json
+/configure/public/componentConfigs.json
 
 #Nested repos where private backend might reside
 # Wildcard patterns for backend plugins
@@ -20,8 +23,13 @@
 /src/essence/*Private-Tools*
 /src/essence/*Plugin-Tools*
 
-/config/pre/toolConfigs.json
+#Nested repos where private components might reside
+# Wildcard patterns for component plugins
+/src/essence/*Private-Components*
+/src/essence/*Plugin-Components*
+
 /src/pre/tools.js
+/src/pre/components.js
 
 /spice/kernels/*
 !/spice/kernels/.gitkeep
@@ -31,6 +39,9 @@
 /build/*
 /data/*
 *__pycache__
+
+*_ignore*
+*_reference
 
 sessions
 .terraform/
@@ -42,5 +53,11 @@ docker-compose.env.yml
 .mcp.json
 .serena
 .claude
-CLAUDE.md
+.playwright-mcp
+
+# Playwright Test Artifacts
+/playwright-report/
+/test-results/
+/.playwright/
 #tools
+

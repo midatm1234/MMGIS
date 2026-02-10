@@ -1,5 +1,4 @@
 import $ from 'jquery'
-import * as d3 from 'd3'
 import F_ from '../../Basics/Formulae_/Formulae_'
 import L_ from '../../Basics/Layers_/Layers_'
 
@@ -272,11 +271,26 @@ const DrawTool_FileModal = {
                     if (body?.geojson) {
                         try {
                             const geojson = JSON.parse(body.geojson)
-                            const templateFromThisFeature =
-                                geojson.features[0] || null
+
+                            // First, check if there's a template in _metadata
+                            let templateToRender = null
+                            if (
+                                geojson._metadata &&
+                                geojson._metadata[0] &&
+                                geojson._metadata[0].template
+                            ) {
+                                // The _metadata[0].template already has the correct structure
+                                templateToRender = geojson._metadata[0].template
+                            }
+
+                            // Otherwise, generate from first feature (but filter internal fields)
+                            const templateFromThisFeature = templateToRender
+                                ? null
+                                : geojson.features[0] || null
+
                             DrawTool_Templater.renderDesignTemplate(
                                 'drawToolFileModalTemplateContainer',
-                                null,
+                                templateToRender,
                                 true,
                                 templateFromThisFeature
                             )
@@ -404,6 +418,8 @@ const DrawTool_FileModal = {
             })
 
             $('#drawToolFileModalActionsCancel').on('click', function () {
+                // Clean up any temporary point markers before closing
+                DrawTool_Templater.cleanupAllPointMarkers()
                 Modal.remove()
                 $('.drawToolFileModalName').val('')
             })
