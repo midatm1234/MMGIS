@@ -3,6 +3,16 @@
 .env
 nul
 
+# Runtime artifacts of start-frozon.ps1
+/frozon-mmgis.log
+/frozon-mmgis.log.err
+/.frozon-build-stamp
+
+# SSH/PuTTY keys must never be committed
+*.key
+*.ppk
+*.pem
+
 /node_modules/
 /ssl/*
 !/ssl/.gitkeep

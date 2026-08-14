@@ -75,7 +75,48 @@ DB_PASS_TEST=mmgis
 `DB_PORT` was `54843`, which nothing listens on — the local PostgreSQL 18
 instance is on `5432`.
 
-## Install and launch (PowerShell)
+## Running it: `start-frozon.ps1`
+
+[start-frozon.ps1](start-frozon.ps1) is the normal way to start and stop
+everything. MMGIS launches TiTiler-pgSTAC itself, so one command brings up both;
+the script health-checks each and tells you if either did not come up.
+
+```powershell
+cd D:\MMGIS
+.\start-frozon.ps1              # rebuild if needed, then start  -> http://localhost:8891/
+.\start-frozon.ps1 -Dev         # hot-reloading frontend         -> http://localhost:8892/
+.\start-frozon.ps1 -Restart     # stop, re-sync, start again
+.\start-frozon.ps1 -Stop        # terminate MMGIS + TiTiler-pgSTAC
+.\start-frozon.ps1 -Watch       # restart automatically on backend changes
+```
+
+It picks up code and repo changes on every run:
+
+- `npm run plugins -- activate` regenerates `src/pre/tools.js` and
+  `configure/public/toolConfigs.json`, which is what makes an added, changed or
+  removed plugin take effect;
+- in production mode the bundle is rebuilt when any file under `src/`,
+  `plugins/`, `configuration/` or `public/` is newer than the last build
+  (tracked via `.frozon-build-stamp`); otherwise the build is skipped, which is
+  the difference between a ~10 minute and a ~1 minute start. Force with
+  `-Rebuild`, skip with `-SkipBuild`;
+- in `-Dev` mode webpack-dev-server compiles from source, so no build step runs
+  and frontend edits hot-reload — only backend changes need a restart.
+
+Other useful flags: `-Port`, `-DbUser`/`-DbPass`/`-DbName`/`-DbPort`/`-DbHost`,
+`-AdjacentPython`, `-ForceConfigPath`, `-MainMission`. Run
+`Get-Help .\start-frozon.ps1 -Detailed` for the full list.
+
+Server output goes to `frozon-mmgis.log` (and `frozon-mmgis.log.err`). Before
+starting, the script reclaims ports 8891/8892/8884 from any orphaned previous run
+— stopping only the `npm` wrapper leaves the `node` and `uvicorn` children holding
+the port, which is what causes `EADDRINUSE`.
+
+The script sets the database values and a `SECRET` itself, so it works even while
+`.env` still holds the sample placeholders. It generates a random `SECRET` per run
+and warns about it; set a real one in `.env` to keep logins across restarts.
+
+## Manual install and launch (PowerShell)
 
 ```powershell
 cd D:\MMGIS
