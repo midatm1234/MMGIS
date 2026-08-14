@@ -8,7 +8,10 @@ import Map_ from '@basics/Map_/Map_'
 import Globe_ from '@basics/Globe_/Globe_'
 import CursorInfo from '@basics/UserInterface_/components/CursorInfo/CursorInfo'
 import calls from '@pre/calls'
-import { parseExternalStacUrl } from '@basics/Layers_/LayerUtils'
+import {
+    parseExternalStacUrl,
+    normalizeCogExpression,
+} from '@basics/Layers_/LayerUtils'
 
 //Add the tool markup if you want to do it this way
 var markup = [].join('\n')
@@ -681,13 +684,8 @@ function parseStacUrl(url) {
 }
 
 function queryDataValue(url, lng, lat, numBands, layerUUID, callback) {
-    // Helper function to add default 'asset_' prefix to bands in expressions if not already prefixed
-    const processExpression = (expression) => {
-        if (!expression || expression.trim() === '') return expression
-        // Replace bX or BX (where X is a number) with asset_bX or asset_BX
-        // Only replace if not already prefixed with an asset name (word_bX pattern)
-        return expression.replace(/(?<!\w)([bB])(\d+)/g, 'asset_$1$2')
-    }
+    // Band names must match what TiTiler exposes — see normalizeCogExpression.
+    const processExpression = normalizeCogExpression
 
     numBands = numBands || 1
     var dataPath

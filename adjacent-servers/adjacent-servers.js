@@ -5,7 +5,13 @@ const { spawn } = require("child_process");
 function adjacentServers() {
   const IS_WINDOWS = /^win/i.test(process.platform) ? true : false;
   const EXT = IS_WINDOWS ? ".bat" : ".sh";
-  const CMD = IS_WINDOWS ? "" : "sh ";
+  // The `.\` is required, not cosmetic. MSYS-based shells (git-bash, which is how
+  // `npm start` is usually run on Windows) export
+  // NoDefaultCurrentDirectoryInExePath=1, and cmd.exe then refuses to resolve a
+  // bare command name from the current directory — so `cd <dir> && start-x.bat`
+  // fails with "is not recognized as an internal or external command" even though
+  // the file is right there, and every adjacent server silently never starts.
+  const CMD = IS_WINDOWS ? ".\\" : "sh ";
 
   const adjacentServers = [
     {

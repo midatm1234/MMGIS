@@ -8,6 +8,11 @@
             "description": "Official MMGIS plugin collection",
             "license": "Apache-2.0",
             "author": "NASA-AMMOS"
+        },
+        {
+            "name": "yunks128--MMGIS-Plugins",
+            "url": "https://github.com/yunks128/MMGIS-Plugins.git",
+            "type": "git"
         }
     ]
 }

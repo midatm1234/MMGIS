@@ -177,6 +177,14 @@ Make the configure page inaccessible to everyone | bool | default `false`
 
 The path to a json config file that acts as the only configured mission for the instance | string | default `''`
 
+When set, the mission's configuration is fetched by the browser from this path and the database is not consulted for it. Because it is fetched over HTTP rather than read off disk, the value must be a path the server already serves and must use forward slashes on every platform — in practice a file under the Missions directory, written relative to the repo root:
+
+```
+FORCE_CONFIG_PATH=Missions/my-mission-config.json
+```
+
+The Missions directory is resolved from the install location (`<repo root>/Missions`) rather than the shell's working directory, so the value is identical on Windows and Linux — a repo at `D:\MMGIS` serves `D:\MMGIS\Missions`. Absolute or backslashed paths (`D:\MMGIS\Missions\...`) will not resolve.
+
 #### `LEADS=`
 
 When not using AUTH=csso, this is a list of usernames to be treated as leads (users with elevated permissions) | string[] | default `[]`
@@ -336,6 +344,18 @@ TiTiler Mosaicking - https://github.com/stac-utils/titiler-pgstac | default `fal
 #### `TITILER_PGSTAC_PORT=`
 
 Port to proxy titiler-pgstac on | default `8884`
+
+#### `ADJACENT_SERVERS_PYTHON=`
+
+Absolute path to the Python interpreter used to start the adjacent Python servers. Leave empty to use whatever `python` is first on `PATH` | string | default `''`
+
+Point this at a conda/mamba environment when the geospatial stack (GDAL, rasterio, PROJ) lives there rather than in the system Python:
+
+```
+ADJACENT_SERVERS_PYTHON=C:\Users\me\AppData\Local\miniforge3\envs\mmgis\python.exe
+```
+
+When the path is inside a conda-style environment, that environment's `Library\share\proj` and `Library\share\gdal` are exported as `PROJ_DATA` / `GDAL_DATA` and its `Library\bin` is prepended to `PATH`. Activation normally does this; invoking the environment's `python.exe` directly does not, and PROJ then fails to find its database and reprojection breaks.
 
 #### `WITH_VELOSERVER=`
 

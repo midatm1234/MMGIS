@@ -267,6 +267,14 @@ let Globe_ = {
             addLayer: function () {
                 return Promise.resolve()
             },
+            // The per-layer entry points the layer-type plugins dispatch
+            // through. Layers_/display/visibility.js calls both unconditionally
+            // on every layer toggle, so a mock without them throws and aborts
+            // makeLayer for missions configured without a globe panel.
+            addLayerFor: function () {
+                return Promise.resolve()
+            },
+            onLayerToggle: function () {},
             toggleLayer: function () {},
             hasLayer: function () {},
             getCenter: function () {},

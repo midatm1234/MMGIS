@@ -21,6 +21,11 @@ configure/public/toolConfigs.json
 /plugins/*
 !/plugins/core/
 !/plugins/README.md
+# frozon holds the AgentChat (MMGIS Copilot) tool, ported out of the retired
+# src/essence/Tools/AgentChat/ tree. It is tracked rather than ignored because a
+# mission config in this repo depends on it — unlike containers installed from a
+# registry, it cannot be re-fetched with `npm run plugins install`.
+!/plugins/frozon/
 /plugins/plugin-state.json
 
 # Legacy plugin directories (kept for backward compatibility during migration)

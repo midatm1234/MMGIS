@@ -241,10 +241,11 @@ export function buildTiTilerQueryParams(options) {
     // expression parameter
     const expressionToUse = options.currentCogExpression || options.cogExpression
     if (expressionToUse && expressionToUse.trim() !== '') {
-        // Replace bX or BX (where X is a number) with asset_bX or asset_BX
-        // Only replace if not already prefixed with an asset name (word_bX pattern)
-        const processedExpression = expressionToUse.replace(/(?<!\w)([bB])(\d+)/g, 'asset_$1$2')
-        params.push(`expression=${encodeURIComponent(processedExpression)}`)
+        params.push(
+            `expression=${encodeURIComponent(
+                normalizeCogExpression(expressionToUse)
+            )}`
+        )
     }
 
     // STAC mosaic limits from global config
@@ -263,8 +264,30 @@ export function buildTiTilerQueryParams(options) {
     return params.join('&')
 }
 
+/**
+ * Normalize a COG band-math expression to the band names TiTiler actually exposes.
+ *
+ * rio-tiler >= 9 renames the merged asset bands to `b1..bN` (see MultiBaseReader
+ * in `rio_tiler/io/base.py`, which resets `band_names` after combining assets).
+ * The older `asset_bN` form — still saved in mission configs, and what MMGIS used
+ * to generate — no longer resolves, and TiTiler rejects the whole tile request
+ * with 400 `Invalid band/asset name`, so the layer renders as nothing.
+ *
+ * MMGIS always requests a single asset literally named `asset`, so dropping the
+ * prefix is unambiguous. Expressions already written as `bN` pass through
+ * untouched, which keeps both spellings working.
+ *
+ * @param {string} expression e.g. `(asset_b1*100)` or `(b1*100)`
+ * @returns {string} the expression with bare `bN` band names
+ */
+export function normalizeCogExpression(expression) {
+    if (!expression || expression.trim() === '') return expression
+    return expression.replace(/(?<!\w)asset_([bB]\d+)/g, '$1')
+}
+
 export default {
     parseExternalStacUrl,
     transformStacUrl,
-    buildTiTilerQueryParams
+    buildTiTilerQueryParams,
+    normalizeCogExpression
 }

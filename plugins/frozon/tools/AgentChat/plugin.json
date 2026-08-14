@@ -1,0 +1,25 @@
+{
+    "uuid": "246540e1-e376-41d2-a228-ca48abe7af86",
+    "id": "frozon-agentchat",
+    "version": "1.0.0",
+    "type": "tool",
+    "tier": "community",
+    "defaultIcon": "robot-outline",
+    "description": "Chat with the MMGIS Copilot to list layers, toggle them, set opacity, and zoom.",
+    "descriptionFull": {
+        "title": "MMGIS Copilot (Agent Chat)",
+        "example": {
+            "message": "List layers"
+        }
+    },
+    "hasVars": false,
+    "name": "AgentChat",
+    "toolbarPriority": 3,
+    "separatedTool": "custom",
+    "expandable": false,
+    "paths": {
+        "AgentChatTool": "./AgentChatTool"
+    },
+    "author": "FROZON / JPL",
+    "license": "Apache-2.0"
+}
