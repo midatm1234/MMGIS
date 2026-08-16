@@ -84,6 +84,11 @@ jobs:
           AUTH: ${{ matrix.auth_mode }}
           PLAYWRIGHT_TEST_UNIT_ONLY: "true"
 
+      - name: Run Installed Plugin Unit Tests
+        run: npm run test:plugins:unit -- --project=chromium
+        env:
+          AUTH: ${{ matrix.auth_mode }}
+
       - name: Run E2E API Tests
         run: npx playwright test tests/e2e/api tests/e2e/security tests/e2e/startup --project=chromium
         env:

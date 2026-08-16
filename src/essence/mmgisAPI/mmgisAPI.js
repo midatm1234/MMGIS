@@ -5,6 +5,8 @@ import QueryURL from '../services/QueryURL'
 import TimeControl from '../Basics/TimeControl_/TimeControl'
 import Login from '../Basics/UserInterface_/components/Login/Login'
 import LegendTool from '../../../plugins/core/tools/Legend/LegendTool.js'
+import { copilotActionRegistry } from './CopilotActionRegistry'
+import { registerCoreCopilotActions } from './CoreCopilotActions'
 
 import $ from 'jquery'
 
@@ -13,8 +15,12 @@ let L = window.L
 var mmgisAPI_ = {
     // Exposes Leaflet map object
     map: null,
+    // Retains the MMGIS map controller so facade calls use the same handlers as
+    // first-party UI controls instead of reproducing their state transitions.
+    mapController: null,
     // Initialize the map variable
     fina: function (map_) {
+        mmgisAPI_.mapController = map_
         mmgisAPI_.map = map_.map
         mmgisAPI.map = map_.map
         if (typeof mmgisAPI_.onLoadCallback === 'function') {
@@ -464,6 +470,387 @@ var mmgisAPI_ = {
             return
         }
     },
+    setLayerOpacity: function (layerName, opacity) {
+        const layerUUID = L_.asLayerUUID(layerName)
+        if (layerUUID == null)
+            throw new Error(`Unable to find layer "${layerName}".`)
+        const normalizedOpacity = Number(opacity)
+        if (
+            !Number.isFinite(normalizedOpacity) ||
+            normalizedOpacity < 0 ||
+            normalizedOpacity > 1
+        )
+            throw new TypeError('Layer opacity must be a number from 0 to 1.')
+        L_.setLayerOpacity(layerUUID, normalizedOpacity)
+        return {
+            layer: layerUUID,
+            opacity: L_.layers.opacity[layerUUID],
+        }
+    },
+    setLayerFilter: function (layerName, filter, value) {
+        const layerUUID = L_.asLayerUUID(layerName)
+        const liveLayer = L_.layers.layer[layerUUID]
+        if (layerUUID == null || !liveLayer || typeof liveLayer !== 'object')
+            throw new Error(
+                'Layer "' + layerName + '" is not loaded and cannot be filtered.'
+            )
+        if (typeof liveLayer.updateFilter !== 'function')
+            throw new Error(
+                'Layer "' +
+                    layerName +
+                    '" does not expose visualization filter controls.'
+            )
+
+        const normalizedFilter = String(filter || '').toLowerCase()
+        const numericRanges = {
+            brightness: [0, 3],
+            contrast: [0, 4],
+            saturate: [0, 4],
+        }
+        let normalizedValue = value
+        if (
+            Object.prototype.hasOwnProperty.call(
+                numericRanges,
+                normalizedFilter
+            )
+        ) {
+            normalizedValue = Number(value)
+            const [minimum, maximum] = numericRanges[normalizedFilter]
+            if (
+                !Number.isFinite(normalizedValue) ||
+                normalizedValue < minimum ||
+                normalizedValue > maximum
+            )
+                throw new RangeError(
+                    normalizedFilter +
+                        ' must be between ' +
+                        minimum +
+                        ' and ' +
+                        maximum +
+                        '.'
+                )
+        } else if (normalizedFilter === 'mix-blend-mode') {
+            normalizedValue = String(value || '').toLowerCase()
+            if (
+                !['unset', 'none', 'color', 'overlay'].includes(normalizedValue)
+            )
+                throw new TypeError(
+                    'Layer blend mode must be unset, none, color, or overlay.'
+                )
+        } else if (normalizedFilter === 'clear') {
+            normalizedValue = null
+        } else {
+            throw new TypeError(
+                'Layer filter must be brightness, contrast, saturate, mix-blend-mode, or clear.'
+            )
+        }
+
+        L_.setLayerFilter(layerUUID, normalizedFilter, normalizedValue)
+        const filters = { ...(L_.layers.filters[layerUUID] || {}) }
+        return {
+            layer: layerUUID,
+            filter: normalizedFilter,
+            value:
+                normalizedFilter === 'clear'
+                    ? null
+                    : filters[normalizedFilter] ?? normalizedValue,
+            filters,
+        }
+    },
+    setMapView: function (latitude, longitude, zoom) {
+        if (latitude && typeof latitude === 'object') {
+            const view = latitude
+            latitude = view.latitude ?? view.lat
+            longitude = view.longitude ?? view.lng ?? view.lon
+            zoom = view.zoom
+        }
+        const lat = Number(latitude)
+        const lng = Number(longitude)
+        const nextZoom =
+            zoom == null ? mmgisAPI_.map?.getZoom?.() : Number(zoom)
+        if (!Number.isFinite(lat) || !Number.isFinite(lng))
+            throw new TypeError('Map latitude and longitude must be finite numbers.')
+        if (!Number.isFinite(nextZoom))
+            throw new TypeError('Map zoom must be a finite number.')
+        if (!mmgisAPI_.map)
+            throw new Error('The MMGIS map is not initialized.')
+
+        const minZoom = mmgisAPI_.map.getMinZoom?.()
+        const maxZoom = mmgisAPI_.map.getMaxZoom?.()
+        if (Number.isFinite(minZoom) && nextZoom < minZoom)
+            throw new RangeError(`Map zoom cannot be less than ${minZoom}.`)
+        if (Number.isFinite(maxZoom) && nextZoom > maxZoom)
+            throw new RangeError(`Map zoom cannot be greater than ${maxZoom}.`)
+
+        if (typeof mmgisAPI_.mapController?.resetView === 'function')
+            mmgisAPI_.mapController.resetView([lat, lng, nextZoom])
+        else mmgisAPI_.map.setView([lat, lng], nextZoom)
+        return { latitude: lat, longitude: lng, zoom: nextZoom }
+    },
+    fitMapBounds: function (bounds, options = {}) {
+        if (!mmgisAPI_.map)
+            throw new Error('The MMGIS map is not initialized.')
+        if (options == null || typeof options !== 'object') options = {}
+        let normalizedBounds
+        if (
+            Array.isArray(bounds) &&
+            bounds.length === 4 &&
+            bounds.every((value) => Number.isFinite(Number(value)))
+        ) {
+            const [west, south, east, north] = bounds.map(Number)
+            if (west >= east || south >= north)
+                throw new RangeError(
+                    'Flat map bounds must be [west, south, east, north].'
+                )
+            normalizedBounds = [
+                [south, west],
+                [north, east],
+            ]
+        } else if (
+            Array.isArray(bounds) &&
+            bounds.length === 2 &&
+            bounds.every(
+                (corner) =>
+                    Array.isArray(corner) &&
+                    corner.length === 2 &&
+                    corner.every((value) => Number.isFinite(Number(value)))
+            )
+        ) {
+            normalizedBounds = bounds.map((corner) => corner.map(Number))
+        } else {
+            throw new TypeError(
+                'Map bounds must be [west, south, east, north] or [[south, west], [north, east]].'
+            )
+        }
+
+        const safeOptions = {}
+        if (typeof options.animate === 'boolean')
+            safeOptions.animate = options.animate
+        if (Number.isFinite(Number(options.duration)))
+            safeOptions.duration = Math.max(0, Number(options.duration))
+        if (Number.isFinite(Number(options.maxZoom)))
+            safeOptions.maxZoom = Number(options.maxZoom)
+        if (
+            Array.isArray(options.padding) &&
+            options.padding.length === 2 &&
+            options.padding.every(
+                (value) =>
+                    Number.isFinite(Number(value)) && Number(value) >= 0
+            )
+        )
+            safeOptions.padding = options.padding.map(Number)
+
+        mmgisAPI_.map.fitBounds(normalizedBounds, safeOptions)
+        return { bounds: normalizedBounds }
+    },
+    setMapZoom: function (zoom) {
+        if (!mmgisAPI_.map)
+            throw new Error('The MMGIS map is not initialized.')
+        const center = mmgisAPI_.map.getCenter()
+        return mmgisAPI_.setMapView(center.lat, center.lng, zoom)
+    },
+    resetMapView: function () {
+        if (!Array.isArray(L_.view) || L_.view.length < 2)
+            throw new Error('The configured MMGIS home view is unavailable.')
+        return mmgisAPI_.setMapView(L_.view[0], L_.view[1], L_.view[2])
+    },
+    openTool: function (name) {
+        const toolName = mmgisAPI_.resolveToolName(name)
+        if (mmgisAPI_.isToolOpen(toolName))
+            return { tool: toolName, open: true, alreadyOpen: true }
+        ToolController_.openTool(toolName)
+        if (!mmgisAPI_.isToolOpen(toolName))
+            throw new Error('Tool "' + toolName + '" did not open.')
+        return { tool: toolName, open: true, alreadyOpen: false }
+    },
+    closeTool: function (name) {
+        const toolName = mmgisAPI_.resolveToolName(name)
+        if (!mmgisAPI_.isToolOpen(toolName))
+            return { tool: toolName, open: false, alreadyClosed: true }
+        ToolController_.closeTool(toolName)
+        if (mmgisAPI_.isToolOpen(toolName))
+            throw new Error('Tool "' + toolName + '" did not close.')
+        return { tool: toolName, open: false, alreadyClosed: false }
+    },
+    resolveToolName: function (name) {
+        if (typeof name !== 'string' || name.trim() === '')
+            throw new TypeError('A tool name is required.')
+        const requested = name.trim().toLowerCase()
+        const withoutSuffix = requested.endsWith('tool')
+            ? requested.slice(0, -4)
+            : requested
+        const configured = (ToolController_.tools || []).find((tool) => {
+            const publicName = String(tool.name || '').toLowerCase()
+            const moduleName = String(tool.js || '').toLowerCase()
+            return (
+                publicName === requested ||
+                publicName === withoutSuffix ||
+                moduleName === requested
+            )
+        })
+        if (!configured)
+            throw new Error(`Tool "${name}" is not available in this mission.`)
+        return configured.name
+    },
+    isToolOpen: function (name) {
+        const toolName = mmgisAPI_.resolveToolName(name)
+        const index = (ToolController_.tools || []).findIndex(
+            (tool) => tool.name === toolName
+        )
+        const moduleName =
+            ToolController_.toolModuleNames?.[index] ||
+            ToolController_.tools?.[index]?.js ||
+            toolName + 'Tool'
+        return (
+            ToolController_.activeToolName === moduleName ||
+            (ToolController_.activeSeparatedTools || []).includes(moduleName) ||
+            (ToolController_.activeSeparatedTools || []).includes(
+                toolName + 'Tool'
+            )
+        )
+    },
+    getConfiguredToolModule: function (name) {
+        const toolName = mmgisAPI_.resolveToolName(name)
+        const index = (ToolController_.tools || []).findIndex(
+            (tool) => tool.name === toolName
+        )
+        const moduleName = ToolController_.toolModuleNames?.[index]
+        const toolModule = ToolController_.toolModules?.[moduleName]
+        if (!moduleName || !toolModule)
+            throw new Error(
+                'The configured "' + toolName + '" tool module is unavailable.'
+            )
+        return { name: toolName, moduleName, toolModule }
+    },
+    getLayerGroups: function () {
+        const { toolModule } = mmgisAPI_.getConfiguredToolModule('Layers')
+        if (typeof toolModule.getHeaderGroups !== 'function')
+            throw new Error(
+                'The configured Layers tool does not expose layer group controls.'
+            )
+        return toolModule.getHeaderGroups()
+    },
+    setLayerGroupExpanded: function (groupName, expanded) {
+        if (typeof expanded !== 'boolean')
+            throw new TypeError(
+                'Layer group expanded state must be a boolean.'
+            )
+        const { name, toolModule } =
+            mmgisAPI_.getConfiguredToolModule('Layers')
+        if (typeof toolModule.setHeaderExpanded !== 'function')
+            throw new Error(
+                'The configured Layers tool does not expose layer group controls.'
+            )
+        mmgisAPI_.openTool(name)
+        return toolModule.setHeaderExpanded(groupName, expanded)
+    },
+    setAllLayerGroupsExpanded: function (expanded) {
+        if (typeof expanded !== 'boolean')
+            throw new TypeError(
+                'Layer group expanded state must be a boolean.'
+            )
+        const { name, toolModule } =
+            mmgisAPI_.getConfiguredToolModule('Layers')
+        if (typeof toolModule.setAllHeadersExpanded !== 'function')
+            throw new Error(
+                'The configured Layers tool does not expose layer group controls.'
+            )
+        mmgisAPI_.openTool(name)
+        return toolModule.setAllHeadersExpanded(expanded)
+    },
+    stepTime: function (direction = 'forward') {
+        if (!TimeControl.enabled || !TimeControl.timeUI)
+            throw new Error('Time controls are not enabled for this mission.')
+        const normalized = String(direction).toLowerCase()
+        let resolvedDirection
+        if (['forward', 'next', '1'].includes(normalized)) {
+            TimeControl.timeUI.stepNext()
+            resolvedDirection = 'forward'
+        } else if (
+            ['backward', 'previous', 'prev', '-1'].includes(normalized)
+        ) {
+            TimeControl.timeUI.stepPrevious()
+            resolvedDirection = 'backward'
+        } else
+            throw new TypeError(
+                'Time step direction must be forward/next or backward/previous.'
+            )
+        return { direction: resolvedDirection, time: TimeControl.getTime() }
+    },
+    setTimePlayback: function (playing) {
+        if (!TimeControl.enabled || !TimeControl.timeUI)
+            throw new Error('Time controls are not enabled for this mission.')
+        if (typeof playing !== 'boolean')
+            throw new TypeError('Time playback state must be a boolean.')
+        if (TimeControl.timeUI.play !== playing)
+            TimeControl.timeUI.togglePlay(playing)
+        const actual = TimeControl.timeUI.play === true
+        if (actual !== playing)
+            throw new Error('The requested time playback state was not applied.')
+        return { playing: actual }
+    },
+    reorderLayer: function (layerName, position, relativeTo) {
+        const layerUUID = L_.asLayerUUID(layerName)
+        const ordered = Array.isArray(L_._layersOrdered)
+            ? [...L_._layersOrdered]
+            : []
+        const currentIndex = ordered.indexOf(layerUUID)
+        if (layerUUID == null || currentIndex < 0)
+            throw new Error(
+                'Layer "' +
+                    layerName +
+                    '" is not in the current render stack.'
+            )
+
+        const normalizedPosition = String(position || '').toLowerCase()
+        if (!['top', 'bottom', 'before', 'after'].includes(normalizedPosition))
+            throw new TypeError(
+                'Layer position must be top, bottom, before, or after.'
+            )
+
+        ordered.splice(currentIndex, 1)
+        let relativeUUID = null
+        if (
+            normalizedPosition === 'before' ||
+            normalizedPosition === 'after'
+        ) {
+            relativeUUID = L_.asLayerUUID(relativeTo)
+            if (relativeUUID == null || relativeUUID === layerUUID)
+                throw new Error(
+                    'A different, ordered relative layer is required.'
+                )
+            const relativeIndex = ordered.indexOf(relativeUUID)
+            if (relativeIndex < 0)
+                throw new Error(
+                    'Relative layer "' +
+                        relativeTo +
+                        '" is not in the current render stack.'
+                )
+            ordered.splice(
+                relativeIndex + (normalizedPosition === 'after' ? 1 : 0),
+                0,
+                layerUUID
+            )
+        } else if (normalizedPosition === 'top') {
+            ordered.unshift(layerUUID)
+        } else {
+            ordered.push(layerUUID)
+        }
+
+        L_.reorderLayers(ordered)
+        if (
+            !Array.isArray(L_._layersOrdered) ||
+            L_._layersOrdered.length !== ordered.length ||
+            L_._layersOrdered.some((layer, index) => layer !== ordered[index])
+        )
+            throw new Error('The requested layer order was not applied.')
+        return {
+            layer: layerUUID,
+            position: normalizedPosition,
+            relativeTo: relativeUUID,
+            order: [...L_._layersOrdered],
+        }
+    },
 }
 
 var mmgisAPI = {
@@ -779,6 +1166,63 @@ var mmgisAPI = {
      */
     toggleLayer: mmgisAPI_.toggleLayer,
 
+    /** Set a layer's opacity through the same layer-type interface used by the Layers tool. */
+    setLayerOpacity: mmgisAPI_.setLayerOpacity,
+
+    /** Set or clear a loaded layer's supported visualization filters. */
+    setLayerFilter: mmgisAPI_.setLayerFilter,
+
+    /** Set the map center and zoom through the MMGIS map controller. */
+    setMapView: mmgisAPI_.setMapView,
+
+    /** Fit the map to a flat bbox or Leaflet-style bounds array. */
+    fitMapBounds: mmgisAPI_.fitMapBounds,
+
+    /** Change only the current map zoom level. */
+    setMapZoom: mmgisAPI_.setMapZoom,
+
+    /** Restore the configured mission/site map view. */
+    resetMapView: mmgisAPI_.resetMapView,
+
+    /** Open a configured tool through ToolController_. */
+    openTool: mmgisAPI_.openTool,
+
+    /** Close a configured tool through ToolController_. */
+    closeTool: mmgisAPI_.closeTool,
+
+    /** Report whether a configured tool is currently open. */
+    isToolOpen: mmgisAPI_.isToolOpen,
+
+    /** List configured layer groups and their rendered expanded state, if open. */
+    getLayerGroups: mmgisAPI_.getLayerGroups,
+
+    /** Expand or collapse one named layer group through the Layers tool. */
+    setLayerGroupExpanded: mmgisAPI_.setLayerGroupExpanded,
+
+    /** Expand or collapse every configured layer group through the Layers tool. */
+    setAllLayerGroupsExpanded: mmgisAPI_.setAllLayerGroupsExpanded,
+
+    /** Step the initialized time controller forward or backward. */
+    stepTime: mmgisAPI_.stepTime,
+
+    /** Start or stop the initialized time controller playback loop. */
+    setTimePlayback: mmgisAPI_.setTimePlayback,
+
+    /** Move one layer within the controller-owned render stack. */
+    reorderLayer: mmgisAPI_.reorderLayer,
+
+    /** Register a namespaced, discoverable Copilot/plugin action. */
+    registerCopilotAction: copilotActionRegistry.register,
+
+    /** Remove an action owned by the registering plugin. */
+    unregisterCopilotAction: copilotActionRegistry.unregister,
+
+    /** List serializable descriptors and current availability. */
+    listCopilotActions: copilotActionRegistry.list,
+
+    /** Execute a registered action and receive {ok, message, data, error}. */
+    executeCopilotAction: copilotActionRegistry.execute,
+
     /**
      * setLayerAttachmentConfig - retunes one of a layer's attachments (labels,
      * pairings, a path gradient, …) while it is live. The attachment reacts
@@ -797,6 +1241,13 @@ var mmgisAPI = {
     // Formulae_
     utils: { ...F_ },
 }
+
+registerCoreCopilotActions(copilotActionRegistry, {
+    api: mmgisAPI_,
+    layers: L_,
+    tools: ToolController_,
+    time: TimeControl,
+})
 
 window.mmgisAPI = mmgisAPI
 

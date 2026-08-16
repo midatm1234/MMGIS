@@ -1,0 +1,151 @@
+{
+  "config": {
+    "configFile": "D:\\MMGIS\\playwright.config.js",
+    "rootDir": "D:/MMGIS",
+    "forbidOnly": false,
+    "fullyParallel": true,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "D:/MMGIS/validation-artifacts/copilot-real-provider-paraphrases-playwright-20260816-final",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "D:/MMGIS",
+        "testIgnore": [
+          "**/plugin-cli/scaffolds/**"
+        ],
+        "testMatch": [
+          "tests/**/*.spec.js",
+          "plugins/**/tests/*.spec.js"
+        ],
+        "timeout": 180000
+      },
+      {
+        "outputDir": "D:/MMGIS/validation-artifacts/copilot-real-provider-paraphrases-playwright-20260816-final",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "firefox",
+        "name": "firefox",
+        "testDir": "D:/MMGIS",
+        "testIgnore": [
+          "**/plugin-cli/scaffolds/**"
+        ],
+        "testMatch": [
+          "/cross-browser/"
+        ],
+        "timeout": 180000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list"
+      ],
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.59.1",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "plugins\\NASA-AMMOS--MMGIS-Plugins\\tools\\AgentChat\\tests\\copilotLiveUI.spec.js",
+      "file": "plugins/NASA-AMMOS--MMGIS-Plugins/tools/AgentChat/tests/copilotLiveUI.spec.js",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "@e2e opt-in real-provider MMGIS AgentChat UI",
+          "file": "plugins/NASA-AMMOS--MMGIS-Plugins/tools/AgentChat/tests/copilotLiveUI.spec.js",
+          "line": 4586,
+          "column": 6,
+          "specs": [
+            {
+              "title": "real provider handles public paraphrases without receiving live mission metadata",
+              "ok": true,
+              "tags": [
+                "e2e"
+              ],
+              "tests": [
+                {
+                  "timeout": 600000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 24227,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "[AgentChat][real-provider-paraphrases] [{\"query\":\"What layers can be analyzed?\",\"context\":\"fixed-public-synthetic\",\"intent\":\"action\",\"tools\":[\"list_analyzable_layers\"],\"handled\":true,\"executionSucceeded\":true,\"outcome\":\"success\",\"toolResults\":[{\"tool\":\"list_analyzable_layers\",\"callId\":\"\",\"ok\":true,\"errorCode\":null,\"message\":\"list_analyzable_layers completed against the fixed public synthetic fixture.\"}],\"response\":\"Currently visible and analyzable: **SFNO Prediction Daily 10 km 2022-2024**.\\n\\n**Analyzable layers (2)**\\n1. **SFNO Prediction Daily 10 km 2022-2024** — visible; statistics, mean, min, max, standard_deviation, threshold, highlight, comparison, anomaly_detection, temporal_trend, animation (stac-cog).\\n2. **SFNO Ground Truth Daily 10 km 2022-2024** — hidden; statistics, mean, min, max, standard_deviation, threshold, highlight, comparison, anomaly_detection, temporal_trend, animation (stac-cog).\\n\\n**Visualization-only or unsupported layers**\\n1. Land Mask — No scalar analytics source or plugin-provided analysis capability is registered for this layer.\\n2. GIBS MODIS True Color — This is visualization-only RGB imagery and does not expose a meaningful scalar value for statistics.\\n3. GIBS Blue Marble — This is visualization-only RGB imagery and does not expose a meaningful scalar value for statistics.\"},{\"query\":\"Give me stats for the visible layer\",\"context\":\"fixed-public-synthetic\",\"intent\":\"action\",\"tools\":[\"statistics_first_visible\"],\"handled\":true,\"executionSucceeded\":true,\"outcome\":\"success\",\"toolResults\":[{\"tool\":\"statistics_first_visible\",\"callId\":\"\",\"ok\":true,\"errorCode\":null,\"message\":\"statistics_first_visible completed against the fixed public synthetic fixture.\"}],\"response\":\"Statistics for the first visible analyzable layer, **SFNO Prediction Daily 10 km 2022-2024**:\\nAnalytics service unavailable; statistics computed locally from the active raster.\\nConfirmed area: current map view (bbox -106.2212, 63.7156, 73.7398, 63.7471)\\nMean: 63.4099 % (std 46.3243 %)\\n25th percentile: 0.1341 %\\nMedian: 97.9377 %\\n75th percentile: 99.8507 %\\nMin: 0.0000 %\\nMax: 100.0000 %\\nValid samples: 66,037\\nApplied configured scalar expression: (b1*100)\\n\\n**How these statistics were computed:**\\nThe analytics provider reports complete population coverage (66,037 valid cells).\\nProvider method: native-resolution raster window.\"},{\"query\":\"Take me to the Beaufort Sea\",\"context\":\"fixed-public-synthetic\",\"intent\":\"action\",\"tools\":[\"zoom_to\"],\"handled\":true,\"executionSucceeded\":true,\"outcome\":\"success\",\"toolResults\":[{\"tool\":\"zoom_to\",\"callId\":\"\",\"ok\":true,\"errorCode\":null,\"message\":\"zoom_to completed against the fixed public synthetic fixture.\"}],\"response\":\"Zoomed to the Beaufort Sea at zoom level 5.\"},{\"query\":\"Show the Beaufort Sea at zoom 3\",\"context\":\"fixed-public-synthetic\",\"intent\":\"action\",\"tools\":[\"zoom_to\"],\"handled\":true,\"executionSucceeded\":true,\"outcome\":\"success\",\"toolResults\":[{\"tool\":\"zoom_to\",\"callId\":\"\",\"ok\":true,\"errorCode\":null,\"message\":\"zoom_to completed against the fixed public synthetic fixture.\"}],\"response\":\"Zoomed to the Beaufort Sea at zoom level 3.\"},{\"query\":\"Hide the current layer\",\"context\":\"fixed-public-synthetic\",\"intent\":\"clarification\",\"tools\":[],\"handled\":true,\"executionSucceeded\":null,\"outcome\":\"clarification\",\"toolResults\":[],\"response\":\"I can’t identify a current or active layer from the available UI state. Please name the layer you want to hide.\"}]\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-08-16T07:46:57.381Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "copilot-real-provider-paraphrases.json",
+                          "contentType": "application/json",
+                          "body": "WwogIHsKICAgICJxdWVyeSI6ICJXaGF0IGxheWVycyBjYW4gYmUgYW5hbHl6ZWQ/IiwKICAgICJjb250ZXh0IjogImZpeGVkLXB1YmxpYy1zeW50aGV0aWMiLAogICAgImludGVudCI6ICJhY3Rpb24iLAogICAgInRvb2xzIjogWwogICAgICAibGlzdF9hbmFseXphYmxlX2xheWVycyIKICAgIF0sCiAgICAiaGFuZGxlZCI6IHRydWUsCiAgICAiZXhlY3V0aW9uU3VjY2VlZGVkIjogdHJ1ZSwKICAgICJvdXRjb21lIjogInN1Y2Nlc3MiLAogICAgInRvb2xSZXN1bHRzIjogWwogICAgICB7CiAgICAgICAgInRvb2wiOiAibGlzdF9hbmFseXphYmxlX2xheWVycyIsCiAgICAgICAgImNhbGxJZCI6ICIiLAogICAgICAgICJvayI6IHRydWUsCiAgICAgICAgImVycm9yQ29kZSI6IG51bGwsCiAgICAgICAgIm1lc3NhZ2UiOiAibGlzdF9hbmFseXphYmxlX2xheWVycyBjb21wbGV0ZWQgYWdhaW5zdCB0aGUgZml4ZWQgcHVibGljIHN5bnRoZXRpYyBmaXh0dXJlLiIKICAgICAgfQogICAgXSwKICAgICJyZXNwb25zZSI6ICJDdXJyZW50bHkgdmlzaWJsZSBhbmQgYW5hbHl6YWJsZTogKipTRk5PIFByZWRpY3Rpb24gRGFpbHkgMTAga20gMjAyMi0yMDI0KiouXG5cbioqQW5hbHl6YWJsZSBsYXllcnMgKDIpKipcbjEuICoqU0ZOTyBQcmVkaWN0aW9uIERhaWx5IDEwIGttIDIwMjItMjAyNCoqIOKAlCB2aXNpYmxlOyBzdGF0aXN0aWNzLCBtZWFuLCBtaW4sIG1heCwgc3RhbmRhcmRfZGV2aWF0aW9uLCB0aHJlc2hvbGQsIGhpZ2hsaWdodCwgY29tcGFyaXNvbiwgYW5vbWFseV9kZXRlY3Rpb24sIHRlbXBvcmFsX3RyZW5kLCBhbmltYXRpb24gKHN0YWMtY29nKS5cbjIuICoqU0ZOTyBHcm91bmQgVHJ1dGggRGFpbHkgMTAga20gMjAyMi0yMDI0Kiog4oCUIGhpZGRlbjsgc3RhdGlzdGljcywgbWVhbiwgbWluLCBtYXgsIHN0YW5kYXJkX2RldmlhdGlvbiwgdGhyZXNob2xkLCBoaWdobGlnaHQsIGNvbXBhcmlzb24sIGFub21hbHlfZGV0ZWN0aW9uLCB0ZW1wb3JhbF90cmVuZCwgYW5pbWF0aW9uIChzdGFjLWNvZykuXG5cbioqVmlzdWFsaXphdGlvbi1vbmx5IG9yIHVuc3VwcG9ydGVkIGxheWVycyoqXG4xLiBMYW5kIE1hc2sg4oCUIE5vIHNjYWxhciBhbmFseXRpY3Mgc291cmNlIG9yIHBsdWdpbi1wcm92aWRlZCBhbmFseXNpcyBjYXBhYmlsaXR5IGlzIHJlZ2lzdGVyZWQgZm9yIHRoaXMgbGF5ZXIuXG4yLiBHSUJTIE1PRElTIFRydWUgQ29sb3Ig4oCUIFRoaXMgaXMgdmlzdWFsaXphdGlvbi1vbmx5IFJHQiBpbWFnZXJ5IGFuZCBkb2VzIG5vdCBleHBvc2UgYSBtZWFuaW5nZnVsIHNjYWxhciB2YWx1ZSBmb3Igc3RhdGlzdGljcy5cbjMuIEdJQlMgQmx1ZSBNYXJibGUg4oCUIFRoaXMgaXMgdmlzdWFsaXphdGlvbi1vbmx5IFJHQiBpbWFnZXJ5IGFuZCBkb2VzIG5vdCBleHBvc2UgYSBtZWFuaW5nZnVsIHNjYWxhciB2YWx1ZSBmb3Igc3RhdGlzdGljcy4iCiAgfSwKICB7CiAgICAicXVlcnkiOiAiR2l2ZSBtZSBzdGF0cyBmb3IgdGhlIHZpc2libGUgbGF5ZXIiLAogICAgImNvbnRleHQiOiAiZml4ZWQtcHVibGljLXN5bnRoZXRpYyIsCiAgICAiaW50ZW50IjogImFjdGlvbiIsCiAgICAidG9vbHMiOiBbCiAgICAgICJzdGF0aXN0aWNzX2ZpcnN0X3Zpc2libGUiCiAgICBdLAogICAgImhhbmRsZWQiOiB0cnVlLAogICAgImV4ZWN1dGlvblN1Y2NlZWRlZCI6IHRydWUsCiAgICAib3V0Y29tZSI6ICJzdWNjZXNzIiwKICAgICJ0b29sUmVzdWx0cyI6IFsKICAgICAgewogICAgICAgICJ0b29sIjogInN0YXRpc3RpY3NfZmlyc3RfdmlzaWJsZSIsCiAgICAgICAgImNhbGxJZCI6ICIiLAogICAgICAgICJvayI6IHRydWUsCiAgICAgICAgImVycm9yQ29kZSI6IG51bGwsCiAgICAgICAgIm1lc3NhZ2UiOiAic3RhdGlzdGljc19maXJzdF92aXNpYmxlIGNvbXBsZXRlZCBhZ2FpbnN0IHRoZSBmaXhlZCBwdWJsaWMgc3ludGhldGljIGZpeHR1cmUuIgogICAgICB9CiAgICBdLAogICAgInJlc3BvbnNlIjogIlN0YXRpc3RpY3MgZm9yIHRoZSBmaXJzdCB2aXNpYmxlIGFuYWx5emFibGUgbGF5ZXIsICoqU0ZOTyBQcmVkaWN0aW9uIERhaWx5IDEwIGttIDIwMjItMjAyNCoqOlxuQW5hbHl0aWNzIHNlcnZpY2UgdW5hdmFpbGFibGU7IHN0YXRpc3RpY3MgY29tcHV0ZWQgbG9jYWxseSBmcm9tIHRoZSBhY3RpdmUgcmFzdGVyLlxuQ29uZmlybWVkIGFyZWE6IGN1cnJlbnQgbWFwIHZpZXcgKGJib3ggLTEwNi4yMjEyLCA2My43MTU2LCA3My43Mzk4LCA2My43NDcxKVxuTWVhbjogNjMuNDA5OSAlIChzdGQgNDYuMzI0MyAlKVxuMjV0aCBwZXJjZW50aWxlOiAwLjEzNDEgJVxuTWVkaWFuOiA5Ny45Mzc3ICVcbjc1dGggcGVyY2VudGlsZTogOTkuODUwNyAlXG5NaW46IDAuMDAwMCAlXG5NYXg6IDEwMC4wMDAwICVcblZhbGlkIHNhbXBsZXM6IDY2LDAzN1xuQXBwbGllZCBjb25maWd1cmVkIHNjYWxhciBleHByZXNzaW9uOiAoYjEqMTAwKVxuXG4qKkhvdyB0aGVzZSBzdGF0aXN0aWNzIHdlcmUgY29tcHV0ZWQ6KipcblRoZSBhbmFseXRpY3MgcHJvdmlkZXIgcmVwb3J0cyBjb21wbGV0ZSBwb3B1bGF0aW9uIGNvdmVyYWdlICg2NiwwMzcgdmFsaWQgY2VsbHMpLlxuUHJvdmlkZXIgbWV0aG9kOiBuYXRpdmUtcmVzb2x1dGlvbiByYXN0ZXIgd2luZG93LiIKICB9LAogIHsKICAgICJxdWVyeSI6ICJUYWtlIG1lIHRvIHRoZSBCZWF1Zm9ydCBTZWEiLAogICAgImNvbnRleHQiOiAiZml4ZWQtcHVibGljLXN5bnRoZXRpYyIsCiAgICAiaW50ZW50IjogImFjdGlvbiIsCiAgICAidG9vbHMiOiBbCiAgICAgICJ6b29tX3RvIgogICAgXSwKICAgICJoYW5kbGVkIjogdHJ1ZSwKICAgICJleGVjdXRpb25TdWNjZWVkZWQiOiB0cnVlLAogICAgIm91dGNvbWUiOiAic3VjY2VzcyIsCiAgICAidG9vbFJlc3VsdHMiOiBbCiAgICAgIHsKICAgICAgICAidG9vbCI6ICJ6b29tX3RvIiwKICAgICAgICAiY2FsbElkIjogIiIsCiAgICAgICAgIm9rIjogdHJ1ZSwKICAgICAgICAiZXJyb3JDb2RlIjogbnVsbCwKICAgICAgICAibWVzc2FnZSI6ICJ6b29tX3RvIGNvbXBsZXRlZCBhZ2FpbnN0IHRoZSBmaXhlZCBwdWJsaWMgc3ludGhldGljIGZpeHR1cmUuIgogICAgICB9CiAgICBdLAogICAgInJlc3BvbnNlIjogIlpvb21lZCB0byB0aGUgQmVhdWZvcnQgU2VhIGF0IHpvb20gbGV2ZWwgNS4iCiAgfSwKICB7CiAgICAicXVlcnkiOiAiU2hvdyB0aGUgQmVhdWZvcnQgU2VhIGF0IHpvb20gMyIsCiAgICAiY29udGV4dCI6ICJmaXhlZC1wdWJsaWMtc3ludGhldGljIiwKICAgICJpbnRlbnQiOiAiYWN0aW9uIiwKICAgICJ0b29scyI6IFsKICAgICAgInpvb21fdG8iCiAgICBdLAogICAgImhhbmRsZWQiOiB0cnVlLAogICAgImV4ZWN1dGlvblN1Y2NlZWRlZCI6IHRydWUsCiAgICAib3V0Y29tZSI6ICJzdWNjZXNzIiwKICAgICJ0b29sUmVzdWx0cyI6IFsKICAgICAgewogICAgICAgICJ0b29sIjogInpvb21fdG8iLAogICAgICAgICJjYWxsSWQiOiAiIiwKICAgICAgICAib2siOiB0cnVlLAogICAgICAgICJlcnJvckNvZGUiOiBudWxsLAogICAgICAgICJtZXNzYWdlIjogInpvb21fdG8gY29tcGxldGVkIGFnYWluc3QgdGhlIGZpeGVkIHB1YmxpYyBzeW50aGV0aWMgZml4dHVyZS4iCiAgICAgIH0KICAgIF0sCiAgICAicmVzcG9uc2UiOiAiWm9vbWVkIHRvIHRoZSBCZWF1Zm9ydCBTZWEgYXQgem9vbSBsZXZlbCAzLiIKICB9LAogIHsKICAgICJxdWVyeSI6ICJIaWRlIHRoZSBjdXJyZW50IGxheWVyIiwKICAgICJjb250ZXh0IjogImZpeGVkLXB1YmxpYy1zeW50aGV0aWMiLAogICAgImludGVudCI6ICJjbGFyaWZpY2F0aW9uIiwKICAgICJ0b29scyI6IFtdLAogICAgImhhbmRsZWQiOiB0cnVlLAogICAgImV4ZWN1dGlvblN1Y2NlZWRlZCI6IG51bGwsCiAgICAib3V0Y29tZSI6ICJjbGFyaWZpY2F0aW9uIiwKICAgICJ0b29sUmVzdWx0cyI6IFtdLAogICAgInJlc3BvbnNlIjogIkkgY2Fu4oCZdCBpZGVudGlmeSBhIGN1cnJlbnQgb3IgYWN0aXZlIGxheWVyIGZyb20gdGhlIGF2YWlsYWJsZSBVSSBzdGF0ZS4gUGxlYXNlIG5hbWUgdGhlIGxheWVyIHlvdSB3YW50IHRvIGhpZGUuIgogIH0KXQ=="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "6f2b6b14560b06e1baa5-5f66fec7e54112c3b6ac",
+              "file": "plugins/NASA-AMMOS--MMGIS-Plugins/tools/AgentChat/tests/copilotLiveUI.spec.js",
+              "line": 4592,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-08-16T07:46:55.781Z",
+    "duration": 26232.941000000003,
+    "expected": 1,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

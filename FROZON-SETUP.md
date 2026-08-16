@@ -154,15 +154,53 @@ npm start          # http://localhost:8891/
 
 ## Copilot (AgentChat)
 
-The Copilot lives at [plugins/frozon/tools/AgentChat/](plugins/frozon/tools/AgentChat/)
-and is enabled by the mission config's `tools` entry
-`{ "name": "AgentChat", "js": "AgentChatTool" }`. Open it from the **Copilot**
-button in the top bar.
+The active Copilot is the `AgentChat` tool plus `Agent` backend from the
+`NASA-AMMOS/MMGIS-Plugins` container. Install that container once, aggregate and
+install its npm dependencies, then activate the plugins:
 
-It requires a backend serving `POST /api/agent` and `GET /api/agent/tools`,
-which **is not part of MMGIS** — see
-[plugins/frozon/README.md](plugins/frozon/README.md). Without it the panel opens
-and reports `Agent is unavailable` when you send a message.
+```powershell
+npm run plugins -- install MMGIS-Plugins
+npm run plugins:install
+npm run plugins -- disable frozon/tools/AgentChat
+npm run plugins -- activate
+```
+
+The explicit `disable` is required once per checkout because
+`plugins/plugin-state.json` is local and gitignored. It prevents the tracked
+legacy AgentChat from competing with the maintained implementation.
+
+`plugins:install` also generates `plugin-python-requirements.txt`, but it does
+not install those Python packages. After selecting the Python interpreter as
+`$py` (the Python environment section below shows one way to do that), install
+the aggregated requirements into that environment and tell Agent analytics to
+use the same interpreter:
+
+```powershell
+& $py -m pip install -r .\plugin-python-requirements.txt
+$env:MMGIS_PYTHON = $py
+```
+
+The environment-variable assignment above applies to the current shell. To use
+the same interpreter in future shells, set `MMGIS_PYTHON` in `.env` to the
+resolved path represented by `$py`.
+
+The mission config enables the UI with
+`{ "name": "AgentChat", "js": "AgentChatTool" }`; open it from the **Copilot**
+button in the top bar. The backend serves `POST /api/agent`,
+`POST /api/agent/continue`, and `GET /api/agent/tools` when `WITH_AGENT=true`.
+The launcher checks that both halves are installed and warns clearly when one is
+missing.
+
+The older tracked copy under
+[plugins/frozon/tools/AgentChat/](plugins/frozon/tools/AgentChat/) is retained as
+legacy provenance and is disabled in this workspace. Do not patch that copy to
+change the running Copilot; `src/pre/tools.js` identifies the implementation
+selected by plugin activation.
+
+Backend JavaScript is loaded only when MMGIS starts. In development mode the
+frontend hot-reloads, but backend/provider changes still require a restart. The
+`-Watch` launcher option watches JavaScript files in every installed plugin
+backend, including the Agent backend.
 
 ## SFNO forecast layers (TiTiler-pgSTAC)
 

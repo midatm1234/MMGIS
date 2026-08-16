@@ -13,13 +13,14 @@ MMGIS uses a plugin-based architecture for tools, backend modules, and component
 7. [Creating Plugins](#creating-plugins)
 8. [`plugin.json` Reference](#pluginjson-reference)
 9. [Time](#time)
-10. [Discovery & State](#discovery--state)
-11. [Webpack Aliases](#webpack-aliases)
-12. [Validation](#validation)
-13. [Registries](#registries)
-14. [Testing Plugins](#testing-plugins)
-15. [Migrating from Legacy Formats](#migrating-from-legacy-formats)
-16. [AI Agent Notes](#ai-agent-notes)
+10. [Copilot Actions](#copilot-actions)
+11. [Discovery & State](#discovery--state)
+12. [Webpack Aliases](#webpack-aliases)
+13. [Validation](#validation)
+14. [Registries](#registries)
+15. [Testing Plugins](#testing-plugins)
+16. [Migrating from Legacy Formats](#migrating-from-legacy-formats)
+17. [AI Agent Notes](#ai-agent-notes)
 
 ---
 
@@ -297,7 +298,11 @@ On Windows, if symlink creation fails due to permissions, `--link` falls back to
 
 - Frontend plugins are auto-activated by the CLI (regenerates `src/pre/tools.js`, `src/pre/components.js`, and `src/pre/interactions.js`). In dev mode, webpack-dev-server hot-reloads automatically. For production, run `npm run build`.
 - Restart the server to activate backend plugins.
-- Run `npm run plugins:install` to install any new npm/pip dependencies declared by the plugins.
+- Run `npm run plugins:install` to aggregate plugin dependencies and install any
+  new npm packages. The command also writes `plugin-python-requirements.txt` and
+  `plugin-conda-deps.txt`, but it does not install Python packages. Install the
+  appropriate generated requirements into the Python environment used by MMGIS
+  (for example, `python -m pip install -r plugin-python-requirements.txt`).
 
 ## Creating Plugins
 
@@ -1054,6 +1059,88 @@ reach for a `_`-prefixed field of core's; those are caches, and they move.
 A layer *type* that needs to re-request or re-stamp its data when time changes
 declares the [`time` surface](./core/layertypes/README.md) instead of
 subscribing — core dispatches it for every layer of that type.
+
+---
+
+## Copilot Actions
+
+Any frontend plugin can advertise a safe, structured capability to MMGIS
+Copilot at runtime. Registration is optional: plugins that never use this API
+continue to load and behave exactly as before.
+
+```js
+const plugin = 'my-container/tools/Spectral'
+const actionId = window.mmgisAPI.registerCopilotAction(
+    {
+        name: 'summarize_layer',
+        plugin,
+        category: 'analytics',
+        description: 'Calculate scalar summary statistics for a layer.',
+        parameters: {
+            type: 'object',
+            properties: { layer: { type: 'string' } },
+            required: ['layer'],
+        },
+        analytics: {
+            operations: ['statistics', 'mean', 'min', 'max'],
+            dataKinds: ['scalar-raster'],
+            requiresScalar: true,
+        },
+    },
+    async ({ layer }, context) => ({
+        ok: true,
+        message: `Calculated statistics for ${layer}.`,
+        data: await calculateStatistics(layer, context),
+    }),
+    () => ({
+        available: hasScalarSource(),
+        reason: 'No scalar data source is configured.',
+    })
+)
+
+// In the plugin's destroy/unmount lifecycle:
+window.mmgisAPI.unregisterCopilotAction(actionId, plugin)
+```
+
+The descriptor fields are required and serializable. `name`, `plugin`, and
+`category` are identifiers; `parameters` is the JSON Schema presented to the
+model. Registration returns a normalized, OpenAI-compatible id such as
+`my-container_tools_spectral__summarize_layer`. Actions are namespaced by
+plugin, duplicate registrations are rejected, and one plugin cannot unregister
+another plugin's action.
+
+Analytics actions may also provide optional applicability metadata as
+`analytics: { operations?, dataKinds?, requiresScalar? }`. `operations` and
+`dataKinds` are arrays of at most 32 unique, non-empty strings (64 characters
+each); `requiresScalar` is a boolean. Copilot uses these declarations together
+with the current mission's layers and registered analytic handlers, so they
+should describe real support rather than advertise aspirational behavior.
+Unknown properties and functions are not included in discovery output. Omitting
+`analytics` preserves the existing action contract and makes no analytic
+capability claim.
+
+`availability` is an optional boolean or sync/async function. It may return a
+boolean or `{ available, reason }`; it is checked during discovery and again
+immediately before execution. Handlers receive `(args, context)` and may be
+sync or async. Their result is normalized to `{ ok, message, data, error }`, so
+always return a concise user-facing `message` when a more specific confirmation
+or explanation is useful. Thrown exceptions are caught and logged by core.
+
+Copilot integrations discover and invoke actions with
+`await window.mmgisAPI.listCopilotActions()` and
+`await window.mmgisAPI.executeCopilotAction(actionId, args, context)`.
+Discovery output never contains handler, availability, or other function
+references.
+
+For common application controls, prefer the public facade rather than DOM
+selectors: `toggleLayer`, `setLayerOpacity`, `setLayerFilter`, `setMapView`,
+`fitMapBounds`, `setMapZoom`, `resetMapView`, `openTool`, `closeTool`,
+`isToolOpen`, `getLayerGroups`, `setLayerGroupExpanded`,
+`setAllLayerGroupsExpanded`, `setTime`, `stepTime`, `setTimePlayback`,
+`selectFeature`, and `reorderLayer`. These delegate to the same MMGIS
+controllers used by the UI. Layer-group setters open the configured Layers tool
+when necessary, invoke its own header handler, and verify the rendered expanded
+state; callers should not query or modify Layers-tool DOM themselves.
 
 ---
 

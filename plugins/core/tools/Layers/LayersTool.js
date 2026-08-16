@@ -138,6 +138,70 @@ const quasiLayers = ['model', 'query']
 const DEPTH_SIZE = 13
 const INDENT_COLOR = 'var(--color-a)'
 
+function layerGroupError(code, message) {
+    const error = new Error(message)
+    error.code = code
+    error.publicMessage = message
+    return error
+}
+
+function configuredLayerGroups() {
+    return (L_.layers?.dataFlat || [])
+        .filter((layer) => layer?.type === 'header')
+        .map((layer) => ({
+            name: String(layer.name),
+            displayName: String(layer.display_name || layer.name),
+        }))
+}
+
+function resolveLayerGroup(groupName) {
+    if (typeof groupName !== 'string' || groupName.trim() === '')
+        throw layerGroupError(
+            'LAYER_GROUP_NAME_REQUIRED',
+            'A layer group name is required.'
+        )
+    const requested = groupName.trim().toLowerCase()
+    const matches = configuredLayerGroups().filter((group) =>
+        [group.name, group.displayName].some(
+            (candidate) => candidate.toLowerCase() === requested
+        )
+    )
+    if (matches.length === 0)
+        throw layerGroupError(
+            'LAYER_GROUP_NOT_FOUND',
+            `Layer group "${groupName.trim()}" is not available in this mission.`
+        )
+    if (matches.length > 1)
+        throw layerGroupError(
+            'LAYER_GROUP_AMBIGUOUS',
+            `Multiple layer groups match "${groupName.trim()}". Use a configured group id.`
+        )
+    return matches[0]
+}
+
+function renderedLayerGroups() {
+    const groups = []
+    $('#layersToolList > li').each(function (index) {
+        const element = $(this)
+        if (element.attr('type') !== 'header') return
+        groups.push({
+            element,
+            index,
+            name: element.attr('name'),
+            depth: Number(element.attr('depth')) || 0,
+            expanded: element.attr('childrenon') === 'true',
+        })
+    })
+    return groups
+}
+
+function renderedLayerGroup(group) {
+    return (
+        renderedLayerGroups().find((entry) => entry.name === group.name) ||
+        null
+    )
+}
+
 // The default color ramp used for image layer types
 const IMAGE_DEFAULT_COLOR_RAMP = 'binary'
 
@@ -211,6 +275,85 @@ var LayersTool = {
             .join('.')
     },
     setHeader: function () {},
+    getHeaderGroups: function () {
+        return configuredLayerGroups().map((group) => {
+            const rendered = renderedLayerGroup(group)
+            return {
+                ...group,
+                expanded: rendered ? rendered.expanded : null,
+            }
+        })
+    },
+    setHeaderExpanded: function (groupName, expanded) {
+        if (typeof expanded !== 'boolean')
+            throw layerGroupError(
+                'INVALID_LAYER_GROUP_STATE',
+                'Layer group expanded state must be a boolean.'
+            )
+        const group = resolveLayerGroup(groupName)
+        let rendered = renderedLayerGroup(group)
+        if (!rendered)
+            throw layerGroupError(
+                'LAYER_GROUP_UI_UNAVAILABLE',
+                'Layer group controls are unavailable because the Layers tool is not open.'
+            )
+        const changed = rendered.expanded !== expanded
+        if (changed) LayersTool.toggleHeader(rendered.element.attr('id'))
+        rendered = renderedLayerGroup(group)
+        if (!rendered || rendered.expanded !== expanded)
+            throw layerGroupError(
+                'LAYER_GROUP_STATE_NOT_APPLIED',
+                `MMGIS could not verify the requested state for layer group "${group.displayName}".`
+            )
+        return { ...group, expanded, changed }
+    },
+    setAllHeadersExpanded: function (expanded) {
+        if (typeof expanded !== 'boolean')
+            throw layerGroupError(
+                'INVALID_LAYER_GROUP_STATE',
+                'Layer group expanded state must be a boolean.'
+            )
+        const configured = configuredLayerGroups()
+        const rendered = renderedLayerGroups()
+        if (configured.length === 0)
+            throw layerGroupError(
+                'NO_LAYER_GROUPS',
+                'No layer groups are configured for this mission.'
+            )
+        if (rendered.length !== configured.length)
+            throw layerGroupError(
+                'LAYER_GROUP_UI_UNAVAILABLE',
+                'Not all layer group controls are currently available in the Layers tool.'
+            )
+
+        rendered.sort((a, b) =>
+            expanded
+                ? a.index - b.index
+                : b.depth - a.depth || b.index - a.index
+        )
+        let changed = 0
+        rendered.forEach((group) => {
+            const current = group.element.attr('childrenon') === 'true'
+            if (current !== expanded) {
+                LayersTool.toggleHeader(group.element.attr('id'))
+                changed += 1
+            }
+        })
+        const actual = renderedLayerGroups()
+        if (
+            actual.length !== configured.length ||
+            actual.some((group) => group.expanded !== expanded)
+        )
+            throw layerGroupError(
+                'LAYER_GROUP_STATE_NOT_APPLIED',
+                'MMGIS could not verify the requested state for every layer group.'
+            )
+        return {
+            expanded,
+            changed,
+            groups: configured.map((group) => ({ ...group, expanded })),
+        }
+    },
     toggleHeader: function (elmIndex) {
         var found = false
         var done = false

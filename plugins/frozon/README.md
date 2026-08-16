@@ -7,7 +7,13 @@ be re-fetched with `npm run plugins install`.
 
 ## Tools
 
-### AgentChat — the MMGIS Copilot
+### AgentChat — legacy Copilot port
+
+> **Not the active implementation in the Frozon development setup.** Plugin
+> activation currently selects the maintained `AgentChat` tool and `Agent`
+> backend from the installed `NASA-AMMOS--MMGIS-Plugins` container. This tracked
+> copy is retained to document the original `hl-797` port and is disabled via
+> `plugins/plugin-state.json` in this workspace.
 
 A draggable, resizable floating chat overlay for querying and driving the map in
 natural language: listing layers, toggling them, setting opacity, zooming,
@@ -24,7 +30,7 @@ by `AgentChat.css`; see `ensureLauncherControl` in `AgentChatTool.js`).
 | `AgentChat.css` | Top-bar launcher chrome |
 | `tests/agentChat.spec.js` | `@unit` guards on the manifest, renderer surface, and ported APIs |
 
-#### Requires a backend that is not in this repository
+#### Historical backend dependency
 
 The tool talks to two endpoints:
 

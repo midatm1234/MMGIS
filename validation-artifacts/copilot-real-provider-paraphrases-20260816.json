@@ -1,0 +1,97 @@
+[
+  {
+    "query": "What layers can be analyzed?",
+    "context": "fixed-public-synthetic",
+    "intent": "action",
+    "tools": [
+      "list_analyzable_layers"
+    ],
+    "handled": true,
+    "executionSucceeded": true,
+    "outcome": "success",
+    "toolResults": [
+      {
+        "tool": "list_analyzable_layers",
+        "callId": "",
+        "ok": true,
+        "errorCode": null,
+        "message": "list_analyzable_layers completed against the fixed public synthetic fixture."
+      }
+    ],
+    "response": "Currently visible and analyzable: **SFNO Prediction Daily 10 km 2022-2024**.\n\n**Analyzable layers (2)**\n1. **SFNO Prediction Daily 10 km 2022-2024** — visible; statistics, mean, min, max, standard_deviation, threshold, highlight, comparison, anomaly_detection, temporal_trend, animation (stac-cog).\n2. **SFNO Ground Truth Daily 10 km 2022-2024** — hidden; statistics, mean, min, max, standard_deviation, threshold, highlight, comparison, anomaly_detection, temporal_trend, animation (stac-cog).\n\n**Visualization-only or unsupported layers**\n1. Land Mask — No scalar analytics source or plugin-provided analysis capability is registered for this layer.\n2. GIBS MODIS True Color — This is visualization-only RGB imagery and does not expose a meaningful scalar value for statistics.\n3. GIBS Blue Marble — This is visualization-only RGB imagery and does not expose a meaningful scalar value for statistics."
+  },
+  {
+    "query": "Give me stats for the visible layer",
+    "context": "fixed-public-synthetic",
+    "intent": "action",
+    "tools": [
+      "statistics_first_visible"
+    ],
+    "handled": true,
+    "executionSucceeded": true,
+    "outcome": "success",
+    "toolResults": [
+      {
+        "tool": "statistics_first_visible",
+        "callId": "",
+        "ok": true,
+        "errorCode": null,
+        "message": "statistics_first_visible completed against the fixed public synthetic fixture."
+      }
+    ],
+    "response": "Statistics for the first visible analyzable layer, **SFNO Prediction Daily 10 km 2022-2024**:\nAnalytics service unavailable; statistics computed locally from the active raster.\nConfirmed area: current map view (bbox -106.2212, 63.7156, 73.7398, 63.7471)\nMean: 63.4099 % (std 46.3243 %)\n25th percentile: 0.1341 %\nMedian: 97.9377 %\n75th percentile: 99.8507 %\nMin: 0.0000 %\nMax: 100.0000 %\nValid samples: 66,037\nApplied configured scalar expression: (b1*100)\n\n**How these statistics were computed:**\nThe analytics provider reports complete population coverage (66,037 valid cells).\nProvider method: native-resolution raster window."
+  },
+  {
+    "query": "Take me to the Beaufort Sea",
+    "context": "fixed-public-synthetic",
+    "intent": "action",
+    "tools": [
+      "zoom_to"
+    ],
+    "handled": true,
+    "executionSucceeded": true,
+    "outcome": "success",
+    "toolResults": [
+      {
+        "tool": "zoom_to",
+        "callId": "",
+        "ok": true,
+        "errorCode": null,
+        "message": "zoom_to completed against the fixed public synthetic fixture."
+      }
+    ],
+    "response": "Zoomed to the Beaufort Sea at zoom level 5."
+  },
+  {
+    "query": "Show the Beaufort Sea at zoom 3",
+    "context": "fixed-public-synthetic",
+    "intent": "action",
+    "tools": [
+      "zoom_to"
+    ],
+    "handled": true,
+    "executionSucceeded": true,
+    "outcome": "success",
+    "toolResults": [
+      {
+        "tool": "zoom_to",
+        "callId": "",
+        "ok": true,
+        "errorCode": null,
+        "message": "zoom_to completed against the fixed public synthetic fixture."
+      }
+    ],
+    "response": "Zoomed to the Beaufort Sea at zoom level 3."
+  },
+  {
+    "query": "Hide the current layer",
+    "context": "fixed-public-synthetic",
+    "intent": "clarification",
+    "tools": [],
+    "handled": true,
+    "executionSucceeded": null,
+    "outcome": "clarification",
+    "toolResults": [],
+    "response": "I can’t identify a current or active layer from the available UI state. Please name the layer you want to hide."
+  }
+]

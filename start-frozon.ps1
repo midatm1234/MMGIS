@@ -13,8 +13,8 @@
         configure/public/toolConfigs.json;
       * in production mode the frontend bundle is rebuilt when any source file is
         newer than the last build;
-      * in dev mode (-Dev) webpack-dev-server hot-reloads the frontend, so only a
-        restart is needed for backend changes.
+      * in dev mode (-Dev) webpack-dev-server hot-reloads the frontend, while the
+        watcher restarts MMGIS for backend changes in any installed plugin.
 
 .PARAMETER Stop
     Terminate MMGIS and TiTiler-pgSTAC, then exit.
@@ -185,6 +185,14 @@ function Sync-Code {
     Invoke-Npm -NpmArgs @('run', 'plugins', '--', 'activate') -What 'Plugin activation'
     Write-Ok 'Plugin registries regenerated.'
 
+    $copilotTool = Join-Path $RepoRoot 'plugins\NASA-AMMOS--MMGIS-Plugins\tools\AgentChat\plugin.json'
+    $copilotBackend = Join-Path $RepoRoot 'plugins\NASA-AMMOS--MMGIS-Plugins\backend\Agent\plugin.json'
+    if (-not (Test-Path $copilotTool) -or -not (Test-Path $copilotBackend)) {
+        Write-Warn 'The MMGIS-Plugins AgentChat tool and Agent backend are not both installed.'
+        Write-Warn 'Install them with: npm run plugins -- install MMGIS-Plugins'
+        Write-Warn 'The Frozon map can still start, but Copilot will be unavailable.'
+    }
+
     if ($Dev) {
         Write-Host '  dev mode: webpack-dev-server compiles from source, no build needed.'
         return
@@ -326,7 +334,12 @@ function Start-WatchLoop {
     $watched = @('scripts', 'API', 'adjacent-servers') |
         ForEach-Object { Join-Path $RepoRoot $_ } |
         Where-Object { Test-Path $_ }
-    $watched += (Join-Path $RepoRoot 'plugins\core\backend')
+    $pluginRoot = Join-Path $RepoRoot 'plugins'
+    if (Test-Path $pluginRoot) {
+        $watched += Get-ChildItem -Path $pluginRoot -Directory -ErrorAction SilentlyContinue |
+            ForEach-Object { Join-Path $_.FullName 'backend' } |
+            Where-Object { Test-Path $_ }
+    }
     $watched = $watched | Where-Object { Test-Path $_ }
 
     Write-Step 'Watching for changes (Ctrl+C to stop)'
