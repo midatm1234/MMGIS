@@ -87,10 +87,10 @@ async function withApiServer(
   }
 }
 
-const agentFailure = {
-  code: "AgentAuthenticationRequired",
-  message: "Sign in to use MMGIS Copilot.",
-  unavailableCode: "AgentAuthenticationUnavailable",
+const customFailure = {
+  code: "ExampleAuthenticationRequired",
+  message: "Sign in to use this API.",
+  unavailableCode: "ExampleAuthenticationUnavailable",
   unavailableMessage: "MMGIS authentication is temporarily unavailable.",
 };
 
@@ -156,12 +156,13 @@ test.describe("@unit typed API authentication", () => {
     }
   });
 
-  test("AUTH=off/none stays public despite an incidental bogus header", async () => {
+  test("explicit public mounts allow AUTH=off/none despite an incidental bogus header", async () => {
     for (const authMode of ["off", " NONE "]) {
       let resolverCalled = false;
       await withApiServer(
         {
           authMode,
+          options: { allowPublic: true },
           resolveLongTermToken: async () => {
             resolverCalled = true;
             throw new Error("resolver must not run in public mode");
@@ -175,6 +176,20 @@ test.describe("@unit typed API authentication", () => {
           expect(resolverCalled).toBe(false);
         },
       );
+    }
+  });
+
+  test("requires credentials by default in public deployments", async () => {
+    for (const authMode of ["off", "none"]) {
+      for (const options of [{}, { allowPublic: false }, { allowPublic: "true" }]) {
+        await withApiServer({ authMode, options }, async (url) => {
+          for (const headers of [{}, { Authorization: "Bearer bogus" }]) {
+            const response = await fetch(url, { headers });
+            expect(response.status).toBe(401);
+            expect((await response.json()).code).toBe("ApiAuthenticationRequired");
+          }
+        });
+      }
     }
   });
 
@@ -192,6 +207,7 @@ test.describe("@unit typed API authentication", () => {
     await withApiServer(
       {
         authMode: "off",
+        options: { allowPublic: true },
         resolveLongTermToken: async () => {
           resolverCalled = true;
           throw new Error("resolver must not run in public mode");
@@ -325,7 +341,7 @@ test.describe("@unit typed API authentication", () => {
           resolverCalls += 1;
           return null;
         },
-        options: agentFailure,
+        options: customFailure,
       },
       async (url) => {
         for (const authorization of [
@@ -341,8 +357,8 @@ test.describe("@unit typed API authentication", () => {
           expect(response.status).toBe(401);
           expect(response.headers.get("www-authenticate")).toBe("Bearer");
           expect(await response.json()).toEqual({
-            error: agentFailure.message,
-            code: agentFailure.code,
+            error: customFailure.message,
+            code: customFailure.code,
           });
         }
       },
@@ -370,7 +386,7 @@ test.describe("@unit typed API authentication", () => {
     await withApiServer(
       {
         resolveLongTermToken: resolveFromTokenRecords(tokenRecords),
-        options: agentFailure,
+        options: customFailure,
         configureRequest: (req) => {
           req.user = "guest";
           req.session.permission = "001";
@@ -383,8 +399,8 @@ test.describe("@unit typed API authentication", () => {
           });
           expect(response.status).toBe(401);
           expect(await response.json()).toEqual({
-            error: agentFailure.message,
-            code: agentFailure.code,
+            error: customFailure.message,
+            code: customFailure.code,
           });
         }
 
@@ -507,7 +523,7 @@ test.describe("@unit typed API authentication", () => {
           permission: "001",
           missions_managing: ["Mission A"],
         }),
-        options: agentFailure,
+        options: customFailure,
       },
       async (url) => {
         for (const token of Object.keys(usernames)) {
@@ -516,8 +532,8 @@ test.describe("@unit typed API authentication", () => {
           });
           expect(response.status).toBe(401);
           expect(await response.json()).toEqual({
-            error: agentFailure.message,
-            code: agentFailure.code,
+            error: customFailure.message,
+            code: customFailure.code,
           });
         }
       },
@@ -532,7 +548,7 @@ test.describe("@unit typed API authentication", () => {
           {},
           { storageErrorToken: secretToken },
         ),
-        options: agentFailure,
+        options: customFailure,
       },
       async (url) => {
         const response = await fetch(url, {
@@ -541,8 +557,8 @@ test.describe("@unit typed API authentication", () => {
         expect(response.status).toBe(503);
         const body = await response.json();
         expect(body).toEqual({
-          error: agentFailure.unavailableMessage,
-          code: agentFailure.unavailableCode,
+          error: customFailure.unavailableMessage,
+          code: customFailure.unavailableCode,
         });
         expect(JSON.stringify(body)).not.toContain(secretToken);
       },

@@ -3,7 +3,7 @@
 ## Phase 1 - Contract
 
 - [x] Define typed 401 and 503 response contracts.
-- [x] Preserve explicit public `AUTH=off` and `AUTH=none` behavior.
+- [x] Require credentials by default; preserve public off/none only with `allowPublic: true`.
 - [x] Define explicit local/CSSO session handling and fail-closed unknown modes.
 - [x] Record legacy middleware compatibility and non-goals.
 
@@ -17,6 +17,8 @@
 - [x] Add a stable SHA-256-derived identity for typed token requests.
 - [x] Persist a SHA-256-derived identity for public Express sessions.
 - [x] Expose `ensureUserForApi` through the backend plugin setup object.
+- [x] Share one session-permission predicate with legacy `ensureUser()`.
+- [x] Adopt the typed gate in core Shortener with explicit public access.
 - [x] Remove raw bearer values from legacy rejection log messages.
 
 ## Phase 3 - Tests and documentation
@@ -38,7 +40,7 @@
 - [x] Run Node syntax checks on the auth module and server.
 - [x] Run auth/spec whitespace and diff checks.
 
-The focused suite passed 13 tests. New auth code/tests are ESLint-clean. The
+The focused suite passed 16 tests, including the real core Shortener mount. New auth code/tests are ESLint-clean. The
 whole legacy `server.js` file retains its pre-existing hook-name lint error and
 unrelated warnings, so whole-file lint is recorded separately rather than
 claimed clean by this feature.

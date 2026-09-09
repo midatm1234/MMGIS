@@ -33,13 +33,17 @@ function parseBearerAuthorization(authorization) {
   return match ? match[1] : null;
 }
 
+function hasUserSessionPermission(req) {
+  return AUTHENTICATED_SESSION_PERMISSIONS.has(req?.session?.permission);
+}
+
 function hasAuthenticatedSession(req, authMode, guestUsername = "guest") {
   if (!req || !req.user || req.user === guestUsername) return false;
 
   const normalizedAuthMode = normalizeAuthMode(authMode);
 
   if (normalizedAuthMode === "local") {
-    return AUTHENTICATED_SESSION_PERMISSIONS.has(req.session?.permission);
+    return hasUserSessionPermission(req);
   }
 
   // CSSO identity is hydrated from trusted proxy headers by cssoHandler. Do
@@ -180,6 +184,7 @@ function createEnsureUserForApi({
   }
 
   return function ensureUserForApi(options = {}) {
+    const allowPublic = options.allowPublic === true;
     const unauthorized = configuredFailure(options, DEFAULT_UNAUTHORIZED);
     const unavailable = configuredFailure(
       options,
@@ -190,9 +195,9 @@ function createEnsureUserForApi({
     return async function requireApiUser(req, res, next) {
       const authMode = getAuthMode();
 
-      // Public installations do not require credentials. In particular, an
-      // unrelated/bogus Authorization header must not make a public route fail.
-      if (isPublicNoAuthMode(authMode)) {
+      // Public access is a deliberate per-mount choice, never an implicit
+      // consequence of the deployment authentication mode.
+      if (allowPublic && isPublicNoAuthMode(authMode)) {
         establishPublicSessionApiAuthIdentity(req);
         return next();
       }
@@ -229,6 +234,7 @@ module.exports = {
   deriveApiAuthIdentity,
   establishPublicSessionApiAuthIdentity,
   hasAuthenticatedSession,
+  hasUserSessionPermission,
   hydrateRequestFromLongTermToken,
   isPublicNoAuthMode,
   isLongTermTokenRecordValid,

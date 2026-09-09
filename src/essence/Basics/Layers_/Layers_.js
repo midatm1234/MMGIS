@@ -2,6 +2,7 @@
 import * as lifecycle from './lifecycle/lifecycle'
 import * as subscriptions from './lifecycle/subscriptions'
 import { parseConfig } from './lifecycle/config'
+import { requeryLayers } from './lifecycle/refresh'
 import * as tree from './hierarchy/tree'
 import * as geojson from './data/geojson'
 import * as visibility from './display/visibility'
@@ -51,6 +52,7 @@ const L_ = {
     _layersParent: {}, // 5 uses
     //
     _localTimeFilterCache: {},
+    _pendingTimeFilters: {},
     //FUTURES
     FUTURES: {
         site: null,
@@ -144,6 +146,9 @@ const L_ = {
     },
     toggleLayer(...a) {
         return visibility.toggleLayer(L_, ...a)
+    },
+    requeryLayers(...a) {
+        return requeryLayers(L_, ...a)
     },
     toggleLayerHelper(...a) {
         return visibility.toggleLayerHelper(L_, ...a)

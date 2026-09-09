@@ -150,7 +150,11 @@ Four things surprise people:
    )
    ```
 
-   In protected modes it accepts an authenticated local/CSSO request or a valid
+   The default gate requires credentials even in `AUTH=off`/`AUTH=none`.
+   Only `ensureUserForApi({ allowPublic: true })` permits anonymous access in
+   those deployment modes; it still requires authentication in local/CSSO modes.
+   The core Shortener mount explicitly opts in to preserve public link sharing.
+   The gate accepts an authenticated local/CSSO request or a valid
    long-term token in exactly `Authorization: Bearer <token>` or the documented
    legacy `Authorization: Bearer: <token>` form. Missing, malformed, invalid,
    expired and guest credentials return HTTP 401 JSON as
@@ -161,7 +165,7 @@ Four things surprise people:
    `req.apiAuthIdentity` in the form `long-term-token:sha256:<hex>`, derived from
    the strictly parsed token so stateless requests can be correlated without
    retaining or logging the raw credential. Session requests continue to use
-   `req.sessionID`. In public `AUTH=off`/`AUTH=none` modes, the gate hashes the
+   `req.sessionID`. For mounts with `allowPublic: true` in `AUTH=off`/`AUTH=none`, the gate hashes the
    available session ID into `session:sha256:<hex>`, assigns it to
    `req.apiAuthIdentity`, and persists the same nonsecret value in `req.session`.
    This initializes an otherwise fresh `saveUninitialized:false` session so the

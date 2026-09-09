@@ -15,8 +15,9 @@ preserves legacy request hydration, and leaves `ensureUser()`, `ensureAdmin()`,
 and `stopGuests` as compatibility APIs.
 
 It does not change login/signup flows, session storage, token persistence, token
-creation, CSSO proxy trust, database schemas, Agent routes, the Copilot action
-registry, or existing legacy response envelopes.
+creation, CSSO proxy trust, database schemas, external plugin routes, or legacy middleware response envelopes.
+The core Shortener mount adopts the typed contract and explicitly allows public
+access on off/none deployments.
 
 ## User scenarios and requirements
 
@@ -41,8 +42,9 @@ can distinguish authentication failures from successful application responses.
   `cssoHandler`.
 - Blank, misspelled, and unknown protected modes do not inherit CSSO behavior;
   they fail closed unless a valid long-term token is supplied.
-- `AUTH=off` and `AUTH=none` are explicitly public and continue even when an
-  incidental `Authorization` header is malformed.
+- Every mount requires credentials by default, including `AUTH=off`/`AUTH=none`.
+- Only `{ allowPublic: true }` opts a mount into anonymous access in off/none;
+  incidental malformed headers do not reject those explicitly public requests.
 - When a public request has an Express session and session ID, the gate assigns
   `req.apiAuthIdentity` as `session:sha256:<hex>` and persists that nonsecret
   value in `req.session`. This marks a fresh `saveUninitialized:false` session
@@ -73,6 +75,8 @@ can distinguish authentication failures from successful application responses.
 - `ensureUser()` remains a no-argument middleware factory.
 - Existing `ensureUser()` and `ensureAdmin()` success/failure shapes and status
   behavior are unchanged.
+- `ensureUser()` and the typed gate share one session-permission predicate,
+  preserving the legacy no-header behavior.
 - Both legacy gates reuse the same token hydration and record-validity helpers
   without acquiring the new typed response contract.
 

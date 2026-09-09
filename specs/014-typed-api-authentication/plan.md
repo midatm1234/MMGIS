@@ -14,7 +14,7 @@
 ```text
 plugin API request
     |
-    +-- AUTH=off/none -> persist hashed session identity -> next()
+    +-- allowPublic:true AND AUTH=off/none -> persist hashed session identity -> next()
     |
     +-- explicit local/CSSO authenticated identity -> next()
     |
@@ -34,7 +34,7 @@ plugin API request
 ### `scripts/apiAuthentication.js`
 
 - Normalize the four documented auth modes while treating only `off` and
-  `none` as public.
+  `none` as public only when the mount opts in with `allowPublic: true`.
 - Accept sessions only through explicit `local` and `csso` branches; unknown
   modes fail closed.
 - Strictly parse the two supported bearer header forms.
@@ -56,6 +56,8 @@ plugin API request
 - Construct the typed resolver with the shared callback adapter and expose the
   middleware factory through the plugin setup object.
 - Keep `ensureUser()`'s no-argument signature and its legacy responses intact.
+- Share the exact session-permission predicate between legacy and typed gates.
+- Adopt the typed gate in core Shortener with explicit public access.
 
 ### Tests and documentation
 
